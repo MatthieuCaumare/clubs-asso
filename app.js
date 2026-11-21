@@ -175,7 +175,8 @@ window.startSite = function (C) {
     if (!url && !eq.widget) return "";
     return `<div class="card officiel"><div class="officiel-head"><div><h3 style="margin:0">Calendrier & classement officiels · ${esc(eq.nom)}</h3>
       <p class="muted small" style="margin:4px 0 0">${eq.lienOfficiel ? "Page officielle de l'équipe" : C.lienOfficiel ? "Page officielle du club" : "Site de la fédération"}${FED?.nom ? " · " + esc(FED.nom) : ""}</p></div>
-      ${extLink(url, "Voir le calendrier et le classement", "btn")}</div>
+      ${extLink(url, "Voir le classement officiel", "btn")}</div>
+      ${!eq.widget && eq.lienOfficiel ? `<p class="small" style="margin:0">Le classement et le calendrier de cette équipe sont tenus à jour par la fédération : ils s'ouvrent sur son site officiel.</p>` : ""}
       ${eq.widget ? `<div class="widget-box" data-widget="${eq.id}"></div><p class="muted small" style="margin:8px 0 0">Mis à jour automatiquement à partir des données de la fédération.</p>` : ""}</div>`;
   }
   function officielListe(page) {
@@ -299,7 +300,8 @@ window.startSite = function (C) {
     resultats(q) {
       const list = joues().filter((m) => !q.equipe || m.equipe === q.equipe);
       const pts = P.points || { v: 3, n: 1, d: 0 };
-      const tableIds = P.classement ? Object.keys(C.classements).filter((id) => equipe(id) && !equipe(id).widget) : [];
+      // Le tableau saisi à la main n'est affiché que si l'équipe n'a pas de source officielle (lien ou widget)
+      const tableIds = P.classement ? Object.keys(C.classements).filter((id) => equipe(id) && !equipe(id).widget && !equipe(id).lienOfficiel) : [];
       const tables = (q.equipe ? tableIds.filter((id) => id === q.equipe) : tableIds).map((id) => {
         const rows = C.classements[id].map((r) => ({ ...r, pts: r.g * pts.v + r.n * pts.n + r.p * pts.d + (r.bonus || 0), diff: r.bp - r.bc }))
           .sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.bp - a.bp);

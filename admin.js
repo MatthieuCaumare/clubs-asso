@@ -313,7 +313,7 @@
     },
     classements: {
       titre: () => "Classements", table: "classements", order: ["id", true], filtre: true, hide: () => !P().classement,
-      help: () => `Astuce : si l'équipe a un widget Score'n'co (onglet Équipes), le classement officiel s'affiche tout seul et ce tableau n'est plus nécessaire. Sinon : une ligne par équipe du championnat. Les points (${P().points?.v ?? 3} par victoire, ${P().points?.n ?? 1} par nul, ${P().points?.d ?? 0} par défaite) et l'ordre sont calculés automatiquement.`,
+      help: () => `Ce tableau n'est affiché que pour les équipes SANS page officielle (onglet Équipes) : sinon, le site renvoie vers le vrai classement de la fédération. Une ligne par équipe du championnat. Les points (${P().points?.v ?? 3} par victoire, ${P().points?.n ?? 1} par nul, ${P().points?.d ?? 0} par défaite) et l'ordre sont calculés automatiquement.`,
       fields: () => [
         { k: "equipe_id", label: "Notre équipe concernée", type: "equipe", req: true },
         { k: "equipe_nom", label: "Nom de l'équipe au classement", type: "text", req: true, hint: `Écrivez « ${S.club.nom} » pour notre club (ligne surlignée).` },

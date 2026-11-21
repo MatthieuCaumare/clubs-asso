@@ -26,6 +26,8 @@
       nom: club.nom, nomCourt: club.nom_court, devise: club.devise || "", fondation: club.fondation, ville: club.ville,
       exemple: club.mode_exemple,
       lienOfficiel: club.lien_officiel || "",
+      // Liens externes choisis par le club (licences, boutique, billetterie…), uniquement en https
+      liens: (Array.isArray(club.liens) ? club.liens : []).filter((l) => l && l.label && /^https:\/\//i.test(l.url || "")).slice(0, 6),
       sport: { id: club.sport_id, nom: club.sports.nom, ...club.sports.profil },
       couleurs: { principale: club.couleur1, secondaire: club.couleur2 },
       logo: club.logo_url,

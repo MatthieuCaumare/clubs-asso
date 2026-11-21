@@ -213,7 +213,7 @@ window.startSite = function (C) {
       return `
         <section class="hero"><div class="wrap hero-inner">${crest()}<div>
           <h1>${esc(C.nom)}</h1>${C.devise ? `<p>${esc(C.devise)}</p>` : ""}
-          <div class="hero-actions">${C.fondation ? `<span class="since">Depuis ${esc(C.fondation)}</span>` : ""}<span class="since">${esc(C.sport.nom || "")} · ${plural(C.equipes.length, "équipe")}</span>${fbButton("on-hero")}</div>
+          <div class="hero-actions">${C.fondation ? `<span class="since">Depuis ${esc(C.fondation)}</span>` : ""}<span class="since">${esc(C.sport.nom || "")} · ${plural(C.equipes.length, "équipe")}</span>${(C.liens || [])[0] ? `<a class="btn secondary" href="${esc(C.liens[0].url)}" target="_blank" rel="noopener">${esc(C.liens[0].label)} ↗</a>` : ""}${fbButton("on-hero")}</div>
         </div></div></section>
         <div class="wrap">${nextHtml}</div>
         ${!res.length && !up.length && officielListe("resultats") ? `<section class="section"><div class="wrap">${officielListe("resultats")}</div></section>` : ""}
@@ -403,13 +403,17 @@ window.startSite = function (C) {
   social.innerHTML = (C.contact.facebook ? `<a class="social-btn" href="${esc(C.contact.facebook)}" target="_blank" rel="noopener" aria-label="Page Facebook du club" title="Facebook">${fbIcon}</a>` : "")
     + (C.contact.instagram ? `<a class="social-btn" href="${esc(C.contact.instagram)}" target="_blank" rel="noopener" aria-label="Instagram du club" title="Instagram">${igIcon}</a>` : "");
   const nav = document.getElementById("nav");
-  nav.innerHTML = pages.map(([id, l]) => `<a href="#/${id}" data-page="${id}">${esc(l)}</a>`).join("");
+  const extNav = C.liens || [];
+  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+  nav.innerHTML = pages.map(([id, l]) => `<a href="#/${id}" data-page="${id}">${esc(l)}</a>`).join("")
+    + extNav.map((x) => `<a class="nav-ext" href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.label)} (s'ouvre sur ${esc(host(x.url))})">${esc(x.label)} <span aria-hidden="true">↗</span></a>`).join("");
   const burger = document.getElementById("burger");
   burger.onclick = () => { const o = nav.classList.toggle("open"); burger.setAttribute("aria-expanded", o); };
 
   document.getElementById("footer").innerHTML = `<div class="wrap"><div class="footer-grid">
     <div><h3>${esc(C.nom)}</h3>${C.devise ? `<p>${esc(C.devise)}</p>` : ""}${C.fondation ? `<p>Fondé en ${esc(C.fondation)}</p>` : ""}</div>
     ${C.stade.nom || C.stade.adresse ? `<div><h3>Installations</h3><p>${esc(C.stade.nom)}</p><p>${esc(C.stade.adresse)}</p></div>` : ""}
+    ${extNav.length ? `<div><h3>Liens du club</h3>${extNav.map((x) => `<p><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)} ↗</a></p>`).join("")}</div>` : ""}
     <div><h3>Contact</h3>${C.contact.email ? `<p><a href="mailto:${esc(C.contact.email)}">${esc(C.contact.email)}</a></p>` : ""}${C.contact.telephone ? `<p>${esc(C.contact.telephone)}</p>` : ""}
       ${C.contact.facebook ? `<p><a href="${esc(C.contact.facebook)}" target="_blank" rel="noopener">Facebook</a></p>` : ""}${C.contact.instagram ? `<p><a href="${esc(C.contact.instagram)}" target="_blank" rel="noopener">Instagram</a></p>` : ""}</div>
     </div><div class="copy">© ${now.getFullYear()} ${esc(C.nom)} · <a href="admin.html?club=${esc(C.slug)}">Espace modérateurs</a></div></div>`;

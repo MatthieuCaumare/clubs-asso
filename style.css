@@ -24,6 +24,7 @@ main { min-height: 60vh; outline: none; }
 .nav { display: flex; flex-wrap: wrap; gap: 2px; }
 .nav a { text-decoration: none; padding: 8px 10px; border-radius: 8px; font-weight: 600; font-size: .9rem; opacity: .9; }
 .nav a:hover { background: rgba(255,255,255,.12); opacity: 1; }
+.nav a.nav-ext { border: 1px solid rgba(255,255,255,.35); }
 .nav a.active { background: var(--c2); color: var(--on-c2); opacity: 1; }
 .burger { display: none; background: none; border: 0; padding: 10px; cursor: pointer; }
 .burger span { display: block; width: 24px; height: 2px; background: var(--on-c1); margin: 5px 0; }

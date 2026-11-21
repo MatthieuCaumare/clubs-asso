@@ -112,6 +112,14 @@
       case "joueurs":
         return wrap(`${lab}<textarea id="${id}" name="${f.k}" style="min-height:160px" placeholder="Un nom par ligne">${esc(v)}</textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn ghost small" data-fill="${id}">Remplir avec l'effectif de l'équipe</button></div>${hint}`);
+      case "liens": {
+        const lienRow = (l = {}) => `<div class="but-row lien-row"><input class="lien-label" maxlength="30" placeholder="Nom de l'onglet (ex. Licences)" value="${esc(l.label || "")}" aria-label="Nom">
+          <input class="lien-url" type="url" placeholder="https://…" value="${esc(l.url || "")}" aria-label="Adresse">
+          <button type="button" class="but-del" aria-label="Retirer">✕</button></div>`;
+        window.__lienRow = lienRow;
+        return wrap(`${lab}<div class="but-list" id="${id}">${(Array.isArray(row[f.k]) ? row[f.k] : []).map(lienRow).join("")}</div>
+          <button type="button" class="btn ghost small" data-addlien="${id}">+ Ajouter un lien</button>${hint}`);
+      }
       case "buteurs": {
         const rows = (Array.isArray(row[f.k]) ? row[f.k] : []).map(butRow).join("");
         return wrap(`${lab}<div class="but-list" id="${id}">${rows}</div>
@@ -194,6 +202,11 @@
     applyShowIf(visibles);
     dlgForm.onchange = () => applyShowIf(visibles);
     bindButeurs(visibles);
+    dlgForm.querySelectorAll("[data-addlien]").forEach((b) => {
+      const box = document.getElementById(b.dataset.addlien);
+      b.onclick = () => { if (box.children.length >= 6) return toast("6 liens maximum.", true); box.insertAdjacentHTML("beforeend", window.__lienRow()); box.lastElementChild.querySelector("input").focus(); };
+      box.addEventListener("click", (e) => { if (e.target.closest(".but-del")) e.target.closest(".lien-row").remove(); });
+    });
     dlgForm.querySelector("#dlg-cancel").onclick = () => dlg.close();
     dlgForm.querySelectorAll("[data-fill]").forEach((b) => (b.onclick = async () => {
       const rid = dlgForm.elements.rencontre_id?.value;
@@ -213,6 +226,17 @@
         for (const f of visibles) {
           const wrapEl = dlgForm.querySelector(`.field[data-k="${f.k}"]`);
           if (wrapEl?.hidden) { out[f.k] = f.type === "bool" ? false : null; continue; }
+          if (f.type === "liens") {
+            const rows = [...document.querySelectorAll(`#f_${f.k} .lien-row`)].map((r) => ({ label: r.querySelector(".lien-label").value.trim(), url: r.querySelector(".lien-url").value.trim() }))
+              .filter((l) => l.label || l.url);
+            for (const l of rows) {
+              if (!l.label) throw new Error("Chaque lien doit avoir un nom (ex. « Licences »).");
+              if (!/^https:\/\/[^\s]+\.[^\s]+/i.test(l.url)) throw new Error(`L'adresse du lien « ${l.label} » doit commencer par https:// (copiez-la depuis la barre d'adresse du site).`);
+            }
+            if (rows.length > 6) throw new Error("6 liens maximum.");
+            out[f.k] = rows;
+            continue;
+          }
           if (f.type === "buteurs") {
             out[f.k] = readButeurs(document.getElementById("f_" + f.k));
             const sp = out.score_pour ?? fromInput({ type: "number" }, dlgForm.elements.score_pour);
@@ -535,6 +559,8 @@
       { k: "telephone", label: "Téléphone", type: "text" },
       { k: "facebook", label: "Page Facebook (lien)", type: "url", hint: "Affiche le bouton « Suivez-nous sur Facebook »." },
       { k: "instagram", label: "Instagram (lien)", type: "url" },
+      { k: "liens", label: "Onglets vers d'autres sites (licences, boutique, billetterie…)", type: "liens", hide: () => !isClubAdmin(),
+        hint: "Chaque lien devient un onglet du menu (6 maximum). Le premier est aussi mis en avant sur l'accueil. Exemples : « Licences » vers HelloAsso, « Boutique » vers votre boutique en ligne." },
       { k: "lien_officiel", label: "Page officielle du club (fédération)", type: "url", hint: "Ex. la page du club sur epreuves.fff.fr." },
       { k: "mode_exemple", label: "Afficher le bandeau « Site en préparation »", type: "bool" },
     ];
@@ -543,7 +569,7 @@
     const c = S.club, F = clubFields();
     panel.innerHTML = `<div class="card"><div class="toolbar"><div><b>Adresse du site :</b> <code>index.html?club=${esc(c.slug)}</code></div>
       <button class="btn" id="edit-club">Modifier les infos du club</button></div>
-      <div class="list">${F.filter((f) => !f.hide?.() && f.type !== "bool").map((f) => `<div class="item"><div class="main"><span>${esc(f.label)}</span><strong>${f.type === "color" ? `<span style="display:inline-block;width:18px;height:18px;border-radius:4px;vertical-align:middle;background:${esc(c[f.k])}"></span> ` : ""}${f.type === "image" ? (c[f.k] ? `<img src="${esc(c[f.k])}" alt="" style="height:40px">` : "—") : f.k === "sport_id" ? esc(c.sports?.nom) : esc(c[f.k] || "—")}</strong></div></div>`).join("")}</div></div>`;
+      <div class="list">${F.filter((f) => !f.hide?.() && f.type !== "bool").map((f) => `<div class="item"><div class="main"><span>${esc(f.label)}</span><strong>${f.type === "color" ? `<span style="display:inline-block;width:18px;height:18px;border-radius:4px;vertical-align:middle;background:${esc(c[f.k])}"></span> ` : ""}${f.type === "liens" ? (Array.isArray(c[f.k]) && c[f.k].length ? c[f.k].map((l) => `${esc(l.label)} → ${esc(l.url)}`).join("<br>") : "—") : f.type === "image" ? (c[f.k] ? `<img src="${esc(c[f.k])}" alt="" style="height:40px">` : "—") : f.k === "sport_id" ? esc(c.sports?.nom) : esc(c[f.k] || "—")}</strong></div></div>`).join("")}</div></div>`;
     panel.querySelector("#edit-club").onclick = () => openForm({
       titre: "Infos du club", fields: F, row: c, onSave: async (vals) => {
         const { data, error } = await sb.from("clubs").update(vals).eq("id", c.id).select("*, sports(*)").single();

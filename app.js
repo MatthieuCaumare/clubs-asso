@@ -216,6 +216,7 @@ window.startSite = function (C) {
           <div class="hero-actions">${C.fondation ? `<span class="since">Depuis ${esc(C.fondation)}</span>` : ""}<span class="since">${esc(C.sport.nom || "")} · ${plural(C.equipes.length, "équipe")}</span>${fbButton("on-hero")}</div>
         </div></div></section>
         <div class="wrap">${nextHtml}</div>
+        ${!res.length && !up.length && officielListe("resultats") ? `<section class="section"><div class="wrap">${officielListe("resultats")}</div></section>` : ""}
         ${res.length ? `<section class="section"><div class="wrap">
           <div class="section-title"><h2>Derniers résultats</h2><a href="#/resultats">Tous les résultats →</a></div>
           <div class="grid grid-2">${res.map(matchCard).join("")}</div></div></section>` : ""}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Espace modérateurs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body class="admin">
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" id="brand" href="index.html"><span>Espace modérateurs</span></a>
+      <div id="user-box" class="user-box"></div>
+    </div>
+  </header>
+  <main id="admin" class="wrap admin-main"><p class="empty">Chargement…</p></main>
+  <div id="toast" class="toast" hidden></div>
+
+  <dialog id="dlg" class="dlg">
+    <form method="dialog" id="dlg-form" class="dlg-form" novalidate></form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

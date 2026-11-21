@@ -291,10 +291,12 @@ window.startSite = function (C) {
 
     matchs(q) {
       const list = aVenir().filter((m) => !q.equipe || m.equipe === q.equipe);
-      return pageHead(P.rencontres, "Le calendrier des prochaines dates") +
+      const off = C.equipes.some((e) => lienEquipe(e));
+      return pageHead(P.rencontres, off ? "Le calendrier officiel de chaque équipe, et les rendez-vous publiés par le club" : "Le calendrier des prochaines dates") +
         `<section class="section"><div class="wrap">${C.equipes.length > 1 ? teamChips("matchs", q.equipe) : ""}
         ${q.equipe ? officielEquipe(equipe(q.equipe)) : officielListe("matchs")}
-        ${list.length ? `<div class="grid grid-2">${list.map(matchCard).join("")}</div>` : empty("Rien de programmé pour le moment.")}</div></section>`;
+        ${list.length ? `<div class="section-title"><h2>${off ? "Publiés par le club" : "À venir"}</h2></div><div class="grid grid-2">${list.map(matchCard).join("")}</div>`
+          : empty(off ? "Le club n'a pas encore publié de rencontre ici : consultez le calendrier officiel ci-dessus." : "Rien de programmé pour le moment.")}</div></section>`;
     },
 
     resultats(q) {
@@ -312,11 +314,14 @@ window.startSite = function (C) {
           </tbody></table></div></div>`;
       }).join("");
       const b = list.reduce((a, m) => (m.score && a[resultClass(m)]++, a), { win: 0, draw: 0, loss: 0 });
-      const sous = individuel ? `${list.length} résultat(s)` : `${plural(b.win, "victoire")} · ${plural(b.draw, "nul")} · ${plural(b.loss, "défaite")}`;
+      const off = C.equipes.some((e) => lienEquipe(e));
+      const sous = off ? "Résultats et classements officiels de chaque équipe, et les scores avec buteurs publiés par le club"
+        : individuel ? `${list.length} résultat(s)` : `${plural(b.win, "victoire")} · ${plural(b.draw, "nul")} · ${plural(b.loss, "défaite")}`;
       return pageHead("Résultats", sous) +
         `<section class="section"><div class="wrap">${C.equipes.length > 1 ? teamChips("resultats", q.equipe) : ""}
           ${q.equipe ? officielEquipe(equipe(q.equipe)) : officielListe("resultats")}
-          ${list.length ? `<div class="grid grid-2">${list.map(matchCard).join("")}</div>` : empty("Aucun résultat pour le moment.")}
+          ${list.length ? `<div class="section-title"><h2>${off ? "Publiés par le club" : "Derniers résultats"}</h2></div><div class="grid grid-2">${list.map(matchCard).join("")}</div>`
+            : empty(off ? "Le club n'a pas encore publié de score ici : consultez les résultats officiels ci-dessus." : "Aucun résultat pour le moment.")}
         </div></section>
         ${tables ? `<section class="section" style="padding-top:0"><div class="wrap"><div class="section-title"><h2>Classements</h2></div>${tables}</div></section>` : ""}`;
     },

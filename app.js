@@ -130,6 +130,50 @@ window.startSite = function (C) {
 
   const empty = (txt) => `<div class="empty card">${txt}</div>`;
 
+  /* ---------------------------------------- Classement des buteurs */
+  // Calculé à partir des buteurs saisis dans les matchs de la saison en cours (depuis le 1er juillet)
+  const debutSaison = new Date(now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1, 6, 1);
+  const LBL_BUT = P.marqueurs || "Buteurs";
+  function classementButeurs(eqId) {
+    const map = new Map();
+    C.matchs.filter((m) => m.equipe === eqId && m.score && d(m.date) >= debutSaison).forEach((m) => {
+      (m.buteurs || []).forEach((b) => {
+        const nom = String(b.nom || "").trim().replace(/\s+/g, " ");
+        if (!nom) return;
+        const k = nom.toLowerCase();
+        const cur = map.get(k) || { nom, buts: 0, matchs: 0 };
+        cur.buts += Math.max(parseInt(b.buts, 10) || 1, 1); cur.matchs += 1;
+        map.set(k, cur);
+      });
+    });
+    const rows = [...map.values()].sort((a, b) => b.buts - a.buts || a.matchs - b.matchs || a.nom.localeCompare(b.nom));
+    rows.forEach((r, i) => { r.rang = i && r.buts === rows[i - 1].buts ? rows[i - 1].rang : i + 1; });
+    return rows;
+  }
+  function buteursCard(eq, max = 0) {
+    const rows = classementButeurs(eq.id);
+    if (!rows.length) return "";
+    const shown = max ? rows.slice(0, max) : rows;
+    const medal = (r) => r.rang === 1 ? "🥇" : r.rang === 2 ? "🥈" : r.rang === 3 ? "🥉" : r.rang;
+    return `<div class="card buteurs-card" style="padding:0;overflow:hidden">
+      <div class="buteurs-head"><h3 style="margin:0">${esc(LBL_BUT)} · ${esc(eq.nom)}</h3><span class="muted small">Saison ${debutSaison.getFullYear()}–${debutSaison.getFullYear() + 1}</span></div>
+      <div class="table-wrap"><table class="buteurs-table"><thead><tr><th>#</th><th>Joueur</th><th>Buts</th><th>Matchs</th></tr></thead><tbody>
+      ${shown.map((r) => `<tr class="${r.rang === 1 ? "top" : ""}"><td>${medal(r)}</td><td>${esc(r.nom)}</td><td class="pts">${r.buts}</td><td>${r.matchs}</td></tr>`).join("")}
+      </tbody></table></div>
+      ${max && rows.length > max ? `<p class="small" style="margin:0;padding:10px 16px"><a href="#/resultats?equipe=${eq.id}">Voir le classement complet →</a></p>` : ""}</div>`;
+  }
+  function sectionButeurs(eqId) {
+    if (individuel) return "";
+    const eqs = eqId ? [equipe(eqId)].filter(Boolean) : C.equipes;
+    const cards = eqs.map((e) => buteursCard(e, eqId ? 0 : 5)).filter(Boolean);
+    const titre = `<div class="section-title"><h2>Classement des ${esc(LBL_BUT.toLowerCase())}</h2></div>`;
+    if (!cards.length) {
+      return C.matchs.some((m) => m.score) || eqId
+        ? `<section class="section" style="padding-top:0"><div class="wrap">${titre}${empty(`Le classement se remplit tout seul dès que le club publie ses scores avec les ${esc(LBL_BUT.toLowerCase())}.`)}</div></section>` : "";
+    }
+    return `<section class="section" style="padding-top:0"><div class="wrap">${titre}<div class="grid ${eqId ? "" : "grid-2"}">${cards.join("")}</div></div></section>`;
+  }
+
   /* ------------------------------------- Données officielles (widgets) */
   // Seul du code venant de Score'n'co est accepté ; tout le reste est ignoré.
   const okHost = (u) => { try { const x = new URL(u, "https://x.invalid"); return x.protocol === "https:" && (x.hostname === "scorenco.com" || x.hostname.endsWith(".scorenco.com")); } catch { return false; } };
@@ -287,6 +331,7 @@ window.startSite = function (C) {
             <div class="player"><div class="photo">${j.photo ? `<img src="${esc(j.photo)}" alt="${esc(j.nom)}" loading="lazy">` : silhouette}${j.num != null ? `<span class="num">${j.num}</span>` : ""}</div>
             <div class="info"><strong>${esc(j.nom)}</strong><span class="muted small">${esc(j.poste)}</span></div></div>`).join("")}</div>`).join("")}
           ${eq.joueurs.length ? "" : `<div class="empty card" style="margin-top:20px">L'effectif de cette équipe sera bientôt publié.</div>`}
+          ${individuel ? "" : (() => { const c = buteursCard(eq, 5); return c ? `<h3 class="poste-title">Meilleurs ${esc(LBL_BUT.toLowerCase())}</h3>${c}` : ""; })()}
         </div></section>`;
     },
 
@@ -324,6 +369,7 @@ window.startSite = function (C) {
           ${list.length ? `<div class="section-title"><h2>${off ? "Publiés par le club" : "Derniers résultats"}</h2></div><div class="grid grid-2">${list.map(matchCard).join("")}</div>`
             : empty(off ? "Le club n'a pas encore publié de score ici : consultez les résultats officiels ci-dessus." : "Aucun résultat pour le moment.")}
         </div></section>
+        ${sectionButeurs(q.equipe)}
         ${tables ? `<section class="section" style="padding-top:0"><div class="wrap"><div class="section-title"><h2>Classements</h2></div>${tables}</div></section>` : ""}`;
     },
 

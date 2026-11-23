@@ -212,6 +212,9 @@ td.pts { font-weight: 800; }
 .m-foot a { color: var(--c1); font-weight: 600; }
 .res-badge { margin-left: auto; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 3px 10px; border-radius: 99px; color: #fff; }
 .res-badge.win { background: var(--win); } .res-badge.draw { background: var(--draw); } .res-badge.loss { background: var(--loss); }
+.buteurs-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; padding: 14px 16px; }
+.buteurs-table td:nth-child(2), .buteurs-table th:nth-child(2) { text-align: left; width: 100%; }
+.buteurs-table tr.top td { background: color-mix(in srgb, var(--c2) 18%, white); font-weight: 700; }
 .officiel { margin-bottom: 20px; border-left: 6px solid var(--c2); }
 .officiel-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .ghost-btn { background: transparent; color: var(--c1); border: 2px solid var(--c1); padding: 8px 14px; }

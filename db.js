@@ -50,6 +50,7 @@
         resultat: m.resultat_texte || "",
         buteurs: Array.isArray(m.buteurs) ? m.buteurs.filter((b) => b && b.nom) : [],
         passeurs: Array.isArray(m.passeurs) ? m.passeurs.filter((b) => b && b.nom) : [],
+        compo: m.compo && typeof m.compo === "object" && ((m.compo.titulaires || []).some(Boolean) || (m.compo.remplacants || []).length) ? m.compo : null,
         jaunes: Array.isArray(m.cartons_jaunes) ? m.cartons_jaunes.filter((b) => b && b.nom) : [],
         rouges: Array.isArray(m.cartons_rouges) ? m.cartons_rouges.filter((b) => b && b.nom) : [],
       })),

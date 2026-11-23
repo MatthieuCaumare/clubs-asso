@@ -120,6 +120,19 @@
         return wrap(`${lab}<div class="but-list" id="${id}">${(Array.isArray(row[f.k]) ? row[f.k] : []).map(lienRow).join("")}</div>
           <button type="button" class="btn ghost small" data-addlien="${id}">+ Ajouter un lien</button>${hint}`);
       }
+      case "compo": {
+        const c = row[f.k] && typeof row[f.k] === "object" ? row[f.k] : {};
+        const forms = P().formations || [];
+        (window.__compoInit ||= {})[id] = Array.isArray(c.titulaires) ? c.titulaires : [];
+        return wrap(`${lab}<div class="compo-edit" id="${id}">
+          ${forms.length ? `<div class="field" style="margin-bottom:8px"><label for="${id}_sys" class="small">Système de jeu</label>
+            <select id="${id}_sys" class="compo-sys">${["", ...forms].map((s) => `<option value="${s}" ${s === (c.systeme || "") ? "selected" : ""}>${s || "Liste simple (sans terrain)"}</option>`).join("")}</select></div>` : ""}
+          <div class="compo-lines"></div>
+          <label class="small" for="${id}_remp" style="font-weight:600">Remplaçants (un par ligne)</label>
+          <textarea id="${id}_remp" class="compo-remp" rows="3" style="min-height:70px">${esc((c.remplacants || []).join("\n"))}</textarea>
+          <button type="button" class="btn ghost small" data-compo-convoc="${id}" style="margin-top:6px">Proposer les convoqués comme remplaçants</button>
+        </div>${hint}`);
+      }
       case "buteurs": {
         const rows = (Array.isArray(row[f.k]) ? row[f.k] : []).map((b) => butRow(b, f.cle, f.max)).join("");
         return wrap(`${lab}<div class="but-list" id="${id}">${rows}</div>
@@ -190,6 +203,52 @@
     fill();
   }
 
+  /* Composition : un poste par case selon le système (ex. 4-3-3 → 1 gardien, 4, 3, 3) */
+  const lignesSysteme = (sys) => sys ? [1, ...sys.split("-").map((n) => parseInt(n, 10) || 0)] : [];
+  function nomLigne(i, nb) {
+    if (i === 0) return "Gardien";
+    if (nb === 2) return "Joueurs";
+    if (i === 1) return "Défense";
+    if (i === nb - 1) return "Attaque";
+    return nb > 4 ? `Milieu ${i - 1}` : "Milieu";
+  }
+  function readCompo(box) {
+    const sys = box.querySelector(".compo-sys")?.value || "";
+    const titulaires = sys ? [...box.querySelectorAll(".compo-slot")].map((i) => i.value.trim())
+      : (box.querySelector(".compo-tit")?.value || "").split("\n").map((s) => s.trim()).filter(Boolean);
+    const remplacants = (box.querySelector(".compo-remp")?.value || "").split("\n").map((s) => s.trim()).filter(Boolean);
+    if (!titulaires.some(Boolean) && !remplacants.length) return {};
+    return { systeme: sys, titulaires, remplacants };
+  }
+  function bindCompo(fields) {
+    fields.filter((x) => x.type === "compo").forEach((f) => {
+      const id = "f_" + f.k, box = document.getElementById(id);
+      if (!box) return;
+      const zone = box.querySelector(".compo-lines"), sel = box.querySelector(".compo-sys");
+      const dessiner = (noms) => {
+        const sys = sel?.value || "";
+        if (!sys) {
+          zone.innerHTML = `<label class="small" style="font-weight:600">Titulaires (un par ligne)</label><textarea class="compo-tit" rows="5" style="min-height:110px">${esc(noms.filter(Boolean).join("\n"))}</textarea>`;
+          return;
+        }
+        const lignes = lignesSysteme(sys); let k = 0;
+        zone.innerHTML = lignes.map((n, i) => `<div class="compo-ligne"><span class="compo-lbl">${nomLigne(i, lignes.length)}</span>
+          <div class="compo-cases">${Array.from({ length: n }, () => `<input class="compo-slot" list="dl-joueurs" placeholder="Joueur" value="${esc(noms[k++] || "")}">`).join("")}</div></div>`).join("");
+      };
+      dessiner(window.__compoInit?.[id] || []);
+      sel?.addEventListener("change", () => { const c = readCompo(box); dessiner(c.titulaires || []); });
+      box.querySelector("[data-compo-convoc]").onclick = async () => {
+        const rid = dlgForm.dataset.rowId;
+        if (!rid) return toast("Enregistrez d'abord le match, puis rouvrez-le pour reprendre sa convocation.", true);
+        const { data } = await sb.from("convocations").select("joueurs").eq("rencontre_id", rid).maybeSingle();
+        if (!data?.joueurs?.length) return toast("Aucune convocation pour ce match.", true);
+        const tit = new Set(readCompo(box).titulaires?.map((n) => n.toLowerCase()) || []);
+        box.querySelector(".compo-remp").value = data.joueurs.filter((n) => !tit.has(n.trim().toLowerCase())).join("\n");
+        toast("Convoqués non titulaires ajoutés en remplaçants.");
+      };
+    });
+  }
+
   function applyShowIf(fields) {
     fields.filter((f) => f.showIf).forEach((f) => {
       const ctrl = dlgForm.elements[f.showIf.k];
@@ -207,6 +266,8 @@
     applyShowIf(visibles);
     dlgForm.onchange = () => applyShowIf(visibles);
     bindButeurs(visibles);
+    dlgForm.dataset.rowId = row.id || "";
+    bindCompo(visibles);
     dlgForm.querySelectorAll("[data-addlien]").forEach((b) => {
       const box = document.getElementById(b.dataset.addlien);
       b.onclick = () => { if (box.children.length >= 6) return toast("6 liens maximum.", true); box.insertAdjacentHTML("beforeend", window.__lienRow()); box.lastElementChild.querySelector("input").focus(); };
@@ -247,6 +308,13 @@
             }
             if (rows.length > 6) throw new Error("6 liens maximum.");
             out[f.k] = rows;
+            continue;
+          }
+          if (f.type === "compo") {
+            out[f.k] = readCompo(document.getElementById("f_" + f.k));
+            const tous = [...(out[f.k].titulaires || []), ...(out[f.k].remplacants || [])].filter(Boolean).map((n) => n.toLowerCase());
+            const doublon = tous.find((n, i) => tous.indexOf(n) !== i);
+            if (doublon) throw new Error(`Composition : « ${doublon} » apparaît deux fois.`);
             continue;
           }
           if (f.type === "buteurs") {
@@ -290,6 +358,8 @@
           { k: "domicile", label: "À domicile", type: "bool", hide: () => ind },
           { k: "competition", label: ind ? "Niveau (départemental, régional…)" : "Compétition", type: "text", ph: ind ? "Championnat départemental" : "Championnat, Coupe…" },
           { k: "lieu", label: "Lieu", type: "text", hint: "Laisser vide pour les matchs à domicile au stade habituel." },
+          { k: "compo", label: "📋 Composition d'équipe", type: "compo", hide: () => ind || !P().compo,
+            hint: "Facultatif. Peut être publiée avant le match. Les noms de l'effectif sont proposés pendant la saisie." },
           { k: "score_pour", label: `Notre score (${P().marque || "points"})`, type: "number", hide: () => ind, hint: "À remplir après la rencontre." },
           { k: "score_contre", label: "Score adverse", type: "number", hide: () => ind },
           { k: "buteurs", label: P().marqueurs || "Buteurs", type: "buteurs", cle: "buts", mot: "but(s) attribué(s)", vsScore: true, unit: (P().marqueurs || "Buteurs").toLowerCase().replace(/s$/, ""), hide: () => ind,

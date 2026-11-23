@@ -107,6 +107,7 @@ window.startSite = function (C) {
       <div class="m-rows">${rows.map(row).join("")}${m.resultat ? `<div class="m-note">${esc(m.resultat)}</div>` : ""}${but}</div>
       <div class="m-foot">${lieu ? `<span>📍 ${esc(lieu)}</span>` : ""}
         ${hasConv ? `<a href="#/convocations?match=${m.id}">Voir la convocation →</a>` : ""}
+        ${m.compo ? `<button type="button" class="linkbtn-site" data-compo="${m.id}">📋 Voir la compo</button>` : ""}
         ${rc ? `<span class="res-badge ${rc}">${RES_LBL[rc]}</span>` : ""}</div></article>`;
   }
 
@@ -142,6 +143,8 @@ window.startSite = function (C) {
   const STATS = {
     buts: { champ: "buteurs", cle: "buts", titre: LBL_BUT, col: "Buts" },
     passes: { champ: "passeurs", cle: "passes", titre: LBL_PASS, col: "Passes" },
+    jaunes: { champ: "jaunes", cle: "n", titre: "Cartons jaunes", col: "🟨", medailles: false },
+    rouges: { champ: "rouges", cle: "n", titre: "Cartons rouges", col: "🟥", medailles: false },
   };
   function classementStat(eqId, S) {
     const map = new Map();
@@ -163,11 +166,11 @@ window.startSite = function (C) {
     const rows = classementStat(eq.id, S);
     if (!rows.length) return "";
     const shown = max ? rows.slice(0, max) : rows;
-    const medal = (r) => r.rang === 1 ? "🥇" : r.rang === 2 ? "🥈" : r.rang === 3 ? "🥉" : r.rang;
+    const medal = (r) => S.medailles === false ? r.rang : r.rang === 1 ? "🥇" : r.rang === 2 ? "🥈" : r.rang === 3 ? "🥉" : r.rang;
     return `<div class="card buteurs-card" style="padding:0;overflow:hidden">
       <div class="buteurs-head"><h3 style="margin:0">${esc(S.titre)} · ${esc(eq.nom)}</h3><span class="muted small">Saison ${debutSaison.getFullYear()}–${debutSaison.getFullYear() + 1}</span></div>
       <div class="table-wrap"><table class="buteurs-table"><thead><tr><th>#</th><th>Joueur</th><th>${S.col}</th><th>Matchs</th></tr></thead><tbody>
-      ${shown.map((r) => `<tr class="${r.rang === 1 ? "top" : ""}"><td>${medal(r)}</td><td>${esc(r.nom)}</td><td class="pts">${r.n}</td><td>${r.matchs}</td></tr>`).join("")}
+      ${shown.map((r) => `<tr class="${r.rang === 1 && S.medailles !== false ? "top" : ""}"><td>${medal(r)}</td><td>${esc(r.nom)}</td><td class="pts">${r.n}</td><td>${r.matchs}</td></tr>`).join("")}
       </tbody></table></div>
       ${max && rows.length > max ? `<p class="small" style="margin:0;padding:10px 16px"><a href="#/resultats?equipe=${eq.id}">Voir le classement complet →</a></p>` : ""}</div>`;
   }
@@ -182,33 +185,6 @@ window.startSite = function (C) {
     }
     return `<section class="section" style="padding-top:0"><div class="wrap">${titre}<div class="grid ${eqId ? "" : "grid-2"}">${cards.join("")}</div></div></section>`;
   }
-  /* ---------------------------------------- Discipline (cartons) */
-  function discipline(eqId) {
-    const map = new Map();
-    const add = (b, champ) => {
-      const nom = String(b.nom || "").trim().replace(/\s+/g, " ");
-      if (!nom) return;
-      const k = nom.toLowerCase();
-      const cur = map.get(k) || { nom, j: 0, r: 0 };
-      cur[champ] += Math.max(parseInt(b.n, 10) || 1, 1);
-      map.set(k, cur);
-    };
-    C.matchs.filter((m) => m.equipe === eqId && m.score && d(m.date) >= debutSaison).forEach((m) => {
-      (m.jaunes || []).forEach((b) => add(b, "j")); (m.rouges || []).forEach((b) => add(b, "r"));
-    });
-    return [...map.values()].sort((a, b) => b.r - a.r || b.j - a.j || a.nom.localeCompare(b.nom));
-  }
-  function disciplineCard(eq) {
-    if (!P.cartons) return "";
-    const rows = discipline(eq.id);
-    if (!rows.length) return "";
-    return `<div class="card buteurs-card" style="padding:0;overflow:hidden">
-      <div class="buteurs-head"><h3 style="margin:0">Discipline · ${esc(eq.nom)}</h3><span class="muted small">Saison ${debutSaison.getFullYear()}–${debutSaison.getFullYear() + 1}</span></div>
-      <div class="table-wrap"><table class="buteurs-table"><thead><tr><th></th><th>Joueur</th><th title="Cartons jaunes">🟨</th><th title="Cartons rouges">🟥</th></tr></thead><tbody>
-      ${rows.map((r) => `<tr><td></td><td>${esc(r.nom)}</td><td class="pts">${r.j || "–"}</td><td class="pts">${r.r || "–"}</td></tr>`).join("")}
-      </tbody></table></div></div>`;
-  }
-
   /* ---------------------------------------- Infirmerie et suspendus */
   const indisposEquipe = (eqId) => (C.indispos || []).filter((x) => x.equipe === eqId);
   const statutJoueur = (eqId, nom) => indisposEquipe(eqId).find((x) => x.nom.trim().toLowerCase() === String(nom).trim().toLowerCase());
@@ -225,9 +201,8 @@ window.startSite = function (C) {
 
   function sectionButeurs(eqId) {
     if (individuel) return "";
-    const disc = eqId && equipe(eqId) ? disciplineCard(equipe(eqId)) : "";
     return sectionStat(eqId, STATS.buts) + (LBL_PASS ? sectionStat(eqId, STATS.passes) : "")
-      + (disc ? `<section class="section" style="padding-top:0"><div class="wrap"><div class="section-title"><h2>Discipline</h2></div>${disc}</div></section>` : "");
+      + (P.cartons ? sectionStat(eqId, STATS.jaunes) + sectionStat(eqId, STATS.rouges) : "");
   }
 
   /* ------------------------------------- Données officielles (widgets) */
@@ -392,8 +367,9 @@ window.startSite = function (C) {
           }).join("")}</div>`).join("")}
           ${eq.joueurs.length ? "" : `<div class="empty card" style="margin-top:20px">L'effectif de cette équipe sera bientôt publié.</div>`}
           ${individuel ? "" : (() => {
-            const cb = buteursCard(eq, 5), cp = LBL_PASS ? statCard(eq, STATS.passes, 5) : "", cd = disciplineCard(eq);
-            return cb || cp || cd ? `<h3 class="poste-title">Statistiques de la saison</h3><div class="grid grid-2">${cb}${cp}${cd}</div>` : "";
+            const cb = buteursCard(eq, 5), cp = LBL_PASS ? statCard(eq, STATS.passes, 5) : "";
+            const cj = P.cartons ? statCard(eq, STATS.jaunes, 5) : "", cr = P.cartons ? statCard(eq, STATS.rouges, 5) : "";
+            return cb || cp || cj || cr ? `<h3 class="poste-title">Statistiques de la saison</h3><div class="grid grid-2">${cb}${cp}${cj}${cr}</div>` : "";
           })()}
         </div></section>`;
     },
@@ -505,6 +481,36 @@ window.startSite = function (C) {
   lb.addEventListener("click", (e) => { if (e.target === lb) closeMedia(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !lb.hidden) closeMedia(); });
   app.addEventListener("click", (e) => { const t = e.target.closest("[data-media]"); if (t) openMedia(+t.dataset.media); });
+
+  /* ---------------------------------------------------- Composition */
+  function compoHtml(m) {
+    const c = m.compo || {};
+    const eq = equipe(m.equipe);
+    const numero = (nom) => eq?.joueurs.find((j) => j.nom.trim().toLowerCase() === String(nom).trim().toLowerCase())?.num;
+    const chip = (nom) => nom ? `<div class="pl"><span class="pl-num">${numero(nom) ?? ""}</span><span class="pl-nom">${esc(nom)}</span></div>` : `<div class="pl pl-vide"><span class="pl-num"></span></div>`;
+    const tit = c.titulaires || [];
+    let terrain = "";
+    if (c.systeme) {
+      const lignes = [1, ...c.systeme.split("-").map((n) => parseInt(n, 10) || 0)];
+      let k = 0;
+      const rangs = lignes.map((n) => tit.slice(k, (k += n)));
+      terrain = `<div class="pitch">${rangs.reverse().map((r) => `<div class="pitch-row">${r.map(chip).join("")}</div>`).join("")}</div>`;
+    } else if (tit.length) {
+      terrain = `<ol class="compo-liste">${tit.filter(Boolean).map((n) => `<li>${numero(n) != null ? `<b>${numero(n)}</b> ` : ""}${esc(n)}</li>`).join("")}</ol>`;
+    }
+    const titre = m.domicile ? `${C.nomCourt || C.nom} – ${m.adversaire}` : `${m.adversaire} – ${C.nomCourt || C.nom}`;
+    return `<div class="compo-view"><p class="compo-titre"><b>${esc(titre)}</b><br><span>${esc(fmtLong(m.date))}${eq ? " · " + esc(eq.nom) : ""}${c.systeme ? " · " + esc(c.systeme) : ""}</span></p>
+      ${terrain}
+      ${(c.remplacants || []).length ? `<p class="compo-remp-site"><b>Remplaçants :</b> ${c.remplacants.map((n) => esc(n)).join(", ")}</p>` : ""}</div>`;
+  }
+  app.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-compo]");
+    if (!t) return;
+    const m = C.matchs.find((x) => x.id === t.dataset.compo);
+    if (!m) return;
+    lbc.innerHTML = compoHtml(m);
+    lb.hidden = false;
+  });
 
   /* -------------------------------------------------- En-tête & routeur */
   document.getElementById("brand").innerHTML = `${crest()}<span>${esc(C.nom)}</span>`;

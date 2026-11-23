@@ -46,6 +46,7 @@
         score: m.score_pour != null && m.score_contre != null ? { pour: m.score_pour, contre: m.score_contre } : null,
         resultat: m.resultat_texte || "",
         buteurs: Array.isArray(m.buteurs) ? m.buteurs.filter((b) => b && b.nom) : [],
+        passeurs: Array.isArray(m.passeurs) ? m.passeurs.filter((b) => b && b.nom) : [],
       })),
       convocations: conv.data.map((c) => ({ match: c.rencontre_id, rdv: c.rdv || "", lieuRdv: c.lieu_rdv || "", responsable: c.responsable || "", joueurs: c.joueurs || [], remarques: c.remarques })),
       classements,

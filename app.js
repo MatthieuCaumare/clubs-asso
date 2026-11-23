@@ -73,7 +73,8 @@ window.startSite = function (C) {
   const resultClass = (m) => !m.score ? "" : m.score.pour > m.score.contre ? "win" : m.score.pour < m.score.contre ? "loss" : "draw";
 
   const RES_LBL = { win: "Victoire", draw: "Nul", loss: "Défaite" };
-  const buteursTxt = (m) => (m.buteurs || []).map((b) => `${esc(b.nom)}${b.buts > 1 ? ` <b>×${b.buts}</b>` : ""}`).join(", ");
+  const listeTxt = (arr, cle) => (arr || []).map((b) => `${esc(b.nom)}${b[cle] > 1 ? ` <b>×${b[cle]}</b>` : ""}`).join(", ");
+  const buteursTxt = (m) => listeTxt(m.buteurs, "buts");
 
   // Carte de match « tableau de score » : une ligne par équipe, score aligné à droite
   function matchCard(m) {
@@ -99,7 +100,8 @@ window.startSite = function (C) {
     const rows = m.domicile ? [usRow, themRow] : [themRow, usRow];
     const lead = joue && m.score.pour !== m.score.contre ? (m.score.pour > m.score.contre ? usRow : themRow) : null;
     const row = (r) => `<div class="m-row ${r.us ? "us" : ""} ${lead === r ? "lead" : ""}">${r.logo}<span class="m-name">${esc(r.nom)}</span>${joue ? `<span class="m-score">${r.score}</span>` : ""}</div>`;
-    const but = joue && m.buteurs?.length ? `<div class="m-buteurs"><span class="m-lbl">${esc(P.marqueurs || "Buteurs")}</span> ${buteursTxt(m)}</div>` : "";
+    const but = (joue && m.buteurs?.length ? `<div class="m-buteurs"><span class="m-lbl">${esc(P.marqueurs || "Buteurs")}</span> ${buteursTxt(m)}</div>` : "")
+      + (joue && P.passeurs && m.passeurs?.length ? `<div class="m-buteurs m-passes"><span class="m-lbl">Passes déc.</span> ${listeTxt(m.passeurs, "passes")}</div>` : "");
     return `<article class="card match2 ${rc}">${top}
       <div class="m-rows">${rows.map(row).join("")}${m.resultat ? `<div class="m-note">${esc(m.resultat)}</div>` : ""}${but}</div>
       <div class="m-foot">${lieu ? `<span>📍 ${esc(lieu)}</span>` : ""}
@@ -134,44 +136,54 @@ window.startSite = function (C) {
   // Calculé à partir des buteurs saisis dans les matchs de la saison en cours (depuis le 1er juillet)
   const debutSaison = new Date(now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1, 6, 1);
   const LBL_BUT = P.marqueurs || "Buteurs";
-  function classementButeurs(eqId) {
+  const LBL_PASS = P.passeurs || "";
+  // Deux classements : buteurs (champ « buteurs », clé « buts ») et passeurs (champ « passeurs », clé « passes »)
+  const STATS = {
+    buts: { champ: "buteurs", cle: "buts", titre: LBL_BUT, col: "Buts" },
+    passes: { champ: "passeurs", cle: "passes", titre: LBL_PASS, col: "Passes" },
+  };
+  function classementStat(eqId, S) {
     const map = new Map();
     C.matchs.filter((m) => m.equipe === eqId && m.score && d(m.date) >= debutSaison).forEach((m) => {
-      (m.buteurs || []).forEach((b) => {
+      (m[S.champ] || []).forEach((b) => {
         const nom = String(b.nom || "").trim().replace(/\s+/g, " ");
         if (!nom) return;
         const k = nom.toLowerCase();
-        const cur = map.get(k) || { nom, buts: 0, matchs: 0 };
-        cur.buts += Math.max(parseInt(b.buts, 10) || 1, 1); cur.matchs += 1;
+        const cur = map.get(k) || { nom, n: 0, matchs: 0 };
+        cur.n += Math.max(parseInt(b[S.cle], 10) || 1, 1); cur.matchs += 1;
         map.set(k, cur);
       });
     });
-    const rows = [...map.values()].sort((a, b) => b.buts - a.buts || a.matchs - b.matchs || a.nom.localeCompare(b.nom));
-    rows.forEach((r, i) => { r.rang = i && r.buts === rows[i - 1].buts ? rows[i - 1].rang : i + 1; });
+    const rows = [...map.values()].sort((a, b) => b.n - a.n || a.matchs - b.matchs || a.nom.localeCompare(b.nom));
+    rows.forEach((r, i) => { r.rang = i && r.n === rows[i - 1].n ? rows[i - 1].rang : i + 1; });
     return rows;
   }
-  function buteursCard(eq, max = 0) {
-    const rows = classementButeurs(eq.id);
+  function statCard(eq, S, max = 0) {
+    const rows = classementStat(eq.id, S);
     if (!rows.length) return "";
     const shown = max ? rows.slice(0, max) : rows;
     const medal = (r) => r.rang === 1 ? "🥇" : r.rang === 2 ? "🥈" : r.rang === 3 ? "🥉" : r.rang;
     return `<div class="card buteurs-card" style="padding:0;overflow:hidden">
-      <div class="buteurs-head"><h3 style="margin:0">${esc(LBL_BUT)} · ${esc(eq.nom)}</h3><span class="muted small">Saison ${debutSaison.getFullYear()}–${debutSaison.getFullYear() + 1}</span></div>
-      <div class="table-wrap"><table class="buteurs-table"><thead><tr><th>#</th><th>Joueur</th><th>Buts</th><th>Matchs</th></tr></thead><tbody>
-      ${shown.map((r) => `<tr class="${r.rang === 1 ? "top" : ""}"><td>${medal(r)}</td><td>${esc(r.nom)}</td><td class="pts">${r.buts}</td><td>${r.matchs}</td></tr>`).join("")}
+      <div class="buteurs-head"><h3 style="margin:0">${esc(S.titre)} · ${esc(eq.nom)}</h3><span class="muted small">Saison ${debutSaison.getFullYear()}–${debutSaison.getFullYear() + 1}</span></div>
+      <div class="table-wrap"><table class="buteurs-table"><thead><tr><th>#</th><th>Joueur</th><th>${S.col}</th><th>Matchs</th></tr></thead><tbody>
+      ${shown.map((r) => `<tr class="${r.rang === 1 ? "top" : ""}"><td>${medal(r)}</td><td>${esc(r.nom)}</td><td class="pts">${r.n}</td><td>${r.matchs}</td></tr>`).join("")}
       </tbody></table></div>
       ${max && rows.length > max ? `<p class="small" style="margin:0;padding:10px 16px"><a href="#/resultats?equipe=${eq.id}">Voir le classement complet →</a></p>` : ""}</div>`;
   }
-  function sectionButeurs(eqId) {
-    if (individuel) return "";
+  const buteursCard = (eq, max) => statCard(eq, STATS.buts, max);
+  function sectionStat(eqId, S) {
     const eqs = eqId ? [equipe(eqId)].filter(Boolean) : C.equipes;
-    const cards = eqs.map((e) => buteursCard(e, eqId ? 0 : 5)).filter(Boolean);
-    const titre = `<div class="section-title"><h2>Classement des ${esc(LBL_BUT.toLowerCase())}</h2></div>`;
+    const cards = eqs.map((e) => statCard(e, S, eqId ? 0 : 5)).filter(Boolean);
+    const titre = `<div class="section-title"><h2>Classement des ${esc(S.titre.toLowerCase())}</h2></div>`;
     if (!cards.length) {
       return C.matchs.some((m) => m.score) || eqId
-        ? `<section class="section" style="padding-top:0"><div class="wrap">${titre}${empty(`Le classement se remplit tout seul dès que le club publie ses scores avec les ${esc(LBL_BUT.toLowerCase())}.`)}</div></section>` : "";
+        ? `<section class="section" style="padding-top:0"><div class="wrap">${titre}${empty(`Le classement se remplit tout seul dès que le club publie ses scores avec les ${esc(S.titre.toLowerCase())}.`)}</div></section>` : "";
     }
     return `<section class="section" style="padding-top:0"><div class="wrap">${titre}<div class="grid ${eqId ? "" : "grid-2"}">${cards.join("")}</div></div></section>`;
+  }
+  function sectionButeurs(eqId) {
+    if (individuel) return "";
+    return sectionStat(eqId, STATS.buts) + (LBL_PASS ? sectionStat(eqId, STATS.passes) : "");
   }
 
   /* ------------------------------------- Données officielles (widgets) */
@@ -331,7 +343,10 @@ window.startSite = function (C) {
             <div class="player"><div class="photo">${j.photo ? `<img src="${esc(j.photo)}" alt="${esc(j.nom)}" loading="lazy">` : silhouette}${j.num != null ? `<span class="num">${j.num}</span>` : ""}</div>
             <div class="info"><strong>${esc(j.nom)}</strong><span class="muted small">${esc(j.poste)}</span></div></div>`).join("")}</div>`).join("")}
           ${eq.joueurs.length ? "" : `<div class="empty card" style="margin-top:20px">L'effectif de cette équipe sera bientôt publié.</div>`}
-          ${individuel ? "" : (() => { const c = buteursCard(eq, 5); return c ? `<h3 class="poste-title">Meilleurs ${esc(LBL_BUT.toLowerCase())}</h3>${c}` : ""; })()}
+          ${individuel ? "" : (() => {
+            const cb = buteursCard(eq, 5), cp = LBL_PASS ? statCard(eq, STATS.passes, 5) : "";
+            return cb || cp ? `<h3 class="poste-title">Meilleurs ${esc(LBL_BUT.toLowerCase())}${cp ? " et passeurs" : ""}</h3><div class="grid grid-2">${cb}${cp}</div>` : "";
+          })()}
         </div></section>`;
     },
 

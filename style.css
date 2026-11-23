@@ -206,6 +206,7 @@ td.pts { font-weight: 800; }
 .m-row.lead .m-score { background: var(--c1); color: var(--on-c1); }
 .m-buteurs { margin-top: 8px; font-size: .88rem; line-height: 1.45; }
 .m-buteurs b { color: var(--c2); }
+.m-passes { margin-top: 2px; color: var(--muted); }
 .m-lbl { display: inline-block; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-right: 4px; }
 .m-note { font-size: .85rem; color: var(--muted); font-style: italic; margin-top: 4px; }
 .m-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 16px; border-top: 1px solid var(--line); font-size: .85rem; color: var(--muted); background: color-mix(in srgb, var(--bg) 60%, white); }

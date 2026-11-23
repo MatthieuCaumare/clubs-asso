@@ -121,10 +121,10 @@
           <button type="button" class="btn ghost small" data-addlien="${id}">+ Ajouter un lien</button>${hint}`);
       }
       case "buteurs": {
-        const rows = (Array.isArray(row[f.k]) ? row[f.k] : []).map(butRow).join("");
+        const rows = (Array.isArray(row[f.k]) ? row[f.k] : []).map((b) => butRow(b, f.cle)).join("");
         return wrap(`${lab}<div class="but-list" id="${id}">${rows}</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn ghost small" data-addbut="${id}">+ Ajouter un ${esc(f.unit || "buteur")}</button><span class="hint" id="${id}_total"></span></div>
-          <datalist id="dl-joueurs"></datalist>${hint}`);
+          ${f.k === "buteurs" ? `<datalist id="dl-joueurs"></datalist>` : ""}${hint}`);
       }
       case "select": case "equipe": case "rencontre":
         return wrap(`${lab}<select id="${id}" name="${f.k}" ${req}>${options(f).map(([o, l]) => `<option value="${esc(o)}" ${String(o) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>${hint}`);
@@ -141,38 +141,42 @@
     }
   }
 
-  function butRow(b = {}) {
-    const n = Math.min(Math.max(parseInt(b.buts, 10) || 1, 1), 15);
+  function butRow(b = {}, cle = "buts") {
+    const n = Math.min(Math.max(parseInt(b[cle], 10) || 1, 1), 15);
     return `<div class="but-row"><input class="but-nom" list="dl-joueurs" placeholder="Nom du joueur" value="${esc(b.nom || "")}" aria-label="Nom">
       <select class="but-n" aria-label="Nombre">${Array.from({ length: 15 }, (_, i) => i + 1).map((k) => `<option value="${k}" ${k === n ? "selected" : ""}>×${k}</option>`).join("")}</select>
       <button type="button" class="but-del" aria-label="Retirer">✕</button></div>`;
   }
-  function readButeurs(box) {
+  function readButeurs(box, cle = "buts") {
     const map = new Map();
     box.querySelectorAll(".but-row").forEach((r) => {
       const nom = r.querySelector(".but-nom").value.trim().replace(/\s+/g, " ");
       if (!nom) return;
       const key = nom.toLowerCase();
       const prev = map.get(key);
-      map.set(key, { nom: prev?.nom || nom, buts: (prev?.buts || 0) + (parseInt(r.querySelector(".but-n").value, 10) || 1) });
+      map.set(key, { nom: prev?.nom || nom, [cle]: (prev?.[cle] || 0) + (parseInt(r.querySelector(".but-n").value, 10) || 1) });
     });
     return [...map.values()];
   }
   function bindButeurs(fields) {
-    const f = fields.find((x) => x.type === "buteurs");
-    if (!f) return;
-    const box = document.getElementById("f_" + f.k);
-    const total = document.getElementById("f_" + f.k + "_total");
-    const refresh = () => {
-      const n = readButeurs(box).reduce((s, b) => s + b.buts, 0);
-      const sp = parseInt(dlgForm.elements.score_pour?.value, 10);
-      total.textContent = n ? `${n} but(s) attribué(s)${Number.isFinite(sp) ? ` sur ${sp}` : ""}` : "";
-      total.style.color = Number.isFinite(sp) && n > sp ? "#b42318" : "";
-    };
-    dlgForm.querySelector(`[data-addbut="f_${f.k}"]`).onclick = () => { box.insertAdjacentHTML("beforeend", butRow()); box.lastElementChild.querySelector("input").focus(); refresh(); };
-    box.addEventListener("click", (e) => { if (e.target.closest(".but-del")) { e.target.closest(".but-row").remove(); refresh(); } });
-    box.addEventListener("input", refresh); box.addEventListener("change", refresh);
-    dlgForm.elements.score_pour?.addEventListener("input", refresh);
+    const liste = fields.filter((x) => x.type === "buteurs");
+    if (!liste.length) return;
+    liste.forEach((f) => {
+      const box = document.getElementById("f_" + f.k);
+      const total = document.getElementById("f_" + f.k + "_total");
+      if (!box) return;
+      const refresh = () => {
+        const n = readButeurs(box, f.cle).reduce((s, b) => s + b[f.cle], 0);
+        const sp = parseInt(dlgForm.elements.score_pour?.value, 10);
+        total.textContent = n ? `${n} ${f.mot}${Number.isFinite(sp) ? ` sur ${sp} but(s) marqué(s)` : ""}` : "";
+        total.style.color = Number.isFinite(sp) && n > sp ? "#b42318" : "";
+      };
+      dlgForm.querySelector(`[data-addbut="f_${f.k}"]`).onclick = () => { box.insertAdjacentHTML("beforeend", butRow({}, f.cle)); box.lastElementChild.querySelector("input").focus(); refresh(); };
+      box.addEventListener("click", (e) => { if (e.target.closest(".but-del")) { e.target.closest(".but-row").remove(); refresh(); } });
+      box.addEventListener("input", refresh); box.addEventListener("change", refresh);
+      dlgForm.elements.score_pour?.addEventListener("input", refresh);
+      refresh();
+    });
     // Suggestions : joueurs de l'équipe choisie
     const fill = async () => {
       const eid = dlgForm.elements.equipe_id?.value;
@@ -182,7 +186,7 @@
       dl.innerHTML = (data || []).map((j) => `<option value="${esc(j.nom)}">`).join("");
     };
     dlgForm.elements.equipe_id?.addEventListener("change", fill);
-    fill(); refresh();
+    fill();
   }
 
   function applyShowIf(fields) {
@@ -238,10 +242,10 @@
             continue;
           }
           if (f.type === "buteurs") {
-            out[f.k] = readButeurs(document.getElementById("f_" + f.k));
+            out[f.k] = readButeurs(document.getElementById("f_" + f.k), f.cle);
             const sp = out.score_pour ?? fromInput({ type: "number" }, dlgForm.elements.score_pour);
-            const n = out[f.k].reduce((s, b) => s + b.buts, 0);
-            if (sp != null && n > sp) throw new Error(`Vous avez attribué ${n} but(s) alors que le score est de ${sp}. Corrigez les buteurs ou le score.`);
+            const n = out[f.k].reduce((s, b) => s + b[f.cle], 0);
+            if (sp != null && n > sp) throw new Error(`${f.label} : ${n} ${f.mot} alors que le score est de ${sp}. Corrigez la liste ou le score.`);
             continue;
           }
           if (f.type === "image") {
@@ -279,8 +283,10 @@
           { k: "lieu", label: "Lieu", type: "text", hint: "Laisser vide pour les matchs à domicile au stade habituel." },
           { k: "score_pour", label: `Notre score (${P().marque || "points"})`, type: "number", hide: () => ind, hint: "À remplir après la rencontre." },
           { k: "score_contre", label: "Score adverse", type: "number", hide: () => ind },
-          { k: "buteurs", label: P().marqueurs || "Buteurs", type: "buteurs", unit: (P().marqueurs || "Buteurs").toLowerCase().replace(/s$/, ""), hide: () => ind,
+          { k: "buteurs", label: P().marqueurs || "Buteurs", type: "buteurs", cle: "buts", mot: "but(s) attribué(s)", unit: (P().marqueurs || "Buteurs").toLowerCase().replace(/s$/, ""), hide: () => ind,
             hint: "Choisissez le joueur (les noms de l'effectif sont proposés) et le nombre de buts : ×1, ×2, ×3…" },
+          { k: "passeurs", label: P().passeurs || "Passeurs décisifs", type: "buteurs", cle: "passes", mot: "passe(s) décisive(s)", unit: "passeur", hide: () => ind || !P().passeurs,
+            hint: "Le joueur qui a fait la dernière passe avant un but, et combien de fois : ×1, ×2… (facultatif)" },
           { k: "resultat_texte", label: ind ? "Résultats (médailles, classements…)" : "Précision (facultatif)", type: ind ? "textarea" : "text", ph: ind ? "2 médailles d'or, 1 de bronze" : "Victoire aux tirs au but" },
         ];
       },

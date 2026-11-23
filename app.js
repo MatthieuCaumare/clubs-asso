@@ -101,7 +101,8 @@ window.startSite = function (C) {
     const lead = joue && m.score.pour !== m.score.contre ? (m.score.pour > m.score.contre ? usRow : themRow) : null;
     const row = (r) => `<div class="m-row ${r.us ? "us" : ""} ${lead === r ? "lead" : ""}">${r.logo}<span class="m-name">${esc(r.nom)}</span>${joue ? `<span class="m-score">${r.score}</span>` : ""}</div>`;
     const but = (joue && m.buteurs?.length ? `<div class="m-buteurs"><span class="m-lbl">${esc(P.marqueurs || "Buteurs")}</span> ${buteursTxt(m)}</div>` : "")
-      + (joue && P.passeurs && m.passeurs?.length ? `<div class="m-buteurs m-passes"><span class="m-lbl">Passes déc.</span> ${listeTxt(m.passeurs, "passes")}</div>` : "");
+      + (joue && P.passeurs && m.passeurs?.length ? `<div class="m-buteurs m-passes"><span class="m-lbl">Passes déc.</span> ${listeTxt(m.passeurs, "passes")}</div>` : "")
+      + (joue && P.cartons && (m.jaunes?.length || m.rouges?.length) ? `<div class="m-buteurs m-passes">${m.jaunes?.length ? `<span title="Cartons jaunes">🟨</span> ${listeTxt(m.jaunes, "n")}` : ""}${m.jaunes?.length && m.rouges?.length ? " &nbsp; " : ""}${m.rouges?.length ? `<span title="Cartons rouges">🟥</span> ${listeTxt(m.rouges, "n")}` : ""}</div>` : "");
     return `<article class="card match2 ${rc}">${top}
       <div class="m-rows">${rows.map(row).join("")}${m.resultat ? `<div class="m-note">${esc(m.resultat)}</div>` : ""}${but}</div>
       <div class="m-foot">${lieu ? `<span>📍 ${esc(lieu)}</span>` : ""}
@@ -181,9 +182,52 @@ window.startSite = function (C) {
     }
     return `<section class="section" style="padding-top:0"><div class="wrap">${titre}<div class="grid ${eqId ? "" : "grid-2"}">${cards.join("")}</div></div></section>`;
   }
+  /* ---------------------------------------- Discipline (cartons) */
+  function discipline(eqId) {
+    const map = new Map();
+    const add = (b, champ) => {
+      const nom = String(b.nom || "").trim().replace(/\s+/g, " ");
+      if (!nom) return;
+      const k = nom.toLowerCase();
+      const cur = map.get(k) || { nom, j: 0, r: 0 };
+      cur[champ] += Math.max(parseInt(b.n, 10) || 1, 1);
+      map.set(k, cur);
+    };
+    C.matchs.filter((m) => m.equipe === eqId && m.score && d(m.date) >= debutSaison).forEach((m) => {
+      (m.jaunes || []).forEach((b) => add(b, "j")); (m.rouges || []).forEach((b) => add(b, "r"));
+    });
+    return [...map.values()].sort((a, b) => b.r - a.r || b.j - a.j || a.nom.localeCompare(b.nom));
+  }
+  function disciplineCard(eq) {
+    if (!P.cartons) return "";
+    const rows = discipline(eq.id);
+    if (!rows.length) return "";
+    return `<div class="card buteurs-card" style="padding:0;overflow:hidden">
+      <div class="buteurs-head"><h3 style="margin:0">Discipline · ${esc(eq.nom)}</h3><span class="muted small">Saison ${debutSaison.getFullYear()}–${debutSaison.getFullYear() + 1}</span></div>
+      <div class="table-wrap"><table class="buteurs-table"><thead><tr><th></th><th>Joueur</th><th title="Cartons jaunes">🟨</th><th title="Cartons rouges">🟥</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td></td><td>${esc(r.nom)}</td><td class="pts">${r.j || "–"}</td><td class="pts">${r.r || "–"}</td></tr>`).join("")}
+      </tbody></table></div></div>`;
+  }
+
+  /* ---------------------------------------- Infirmerie et suspendus */
+  const indisposEquipe = (eqId) => (C.indispos || []).filter((x) => x.equipe === eqId);
+  const statutJoueur = (eqId, nom) => indisposEquipe(eqId).find((x) => x.nom.trim().toLowerCase() === String(nom).trim().toLowerCase());
+  function infirmerieCard(eq) {
+    const list = indisposEquipe(eq.id);
+    if (!list.length) return "";
+    const ligne = (x) => `<li><span class="indispo-ico">${x.type === "blessure" ? "🩹" : "⛔"}</span><div><strong>${esc(x.nom)}</strong>
+      <span class="muted small">${x.type === "blessure" ? "Blessé" : `Suspendu${x.matchs ? ` · ${x.matchs} match${x.matchs > 1 ? "s" : ""}` : ""}`}${x.fin ? ` · ${x.type === "blessure" ? "retour prévu le" : "jusqu'au"} ${esc(fmtLong(x.fin).replace(/^\w+ /, ""))}` : ""}${x.precision ? ` · ${esc(x.precision)}` : ""}</span></div></li>`;
+    const bl = list.filter((x) => x.type === "blessure"), su = list.filter((x) => x.type === "suspension");
+    return `<div class="card indispo-card">
+      ${bl.length ? `<h3>🩹 Infirmerie</h3><ul class="indispo-list">${bl.map(ligne).join("")}</ul>` : ""}
+      ${su.length ? `<h3 ${bl.length ? 'style="margin-top:14px"' : ""}>⛔ Suspendus</h3><ul class="indispo-list">${su.map(ligne).join("")}</ul>` : ""}</div>`;
+  }
+
   function sectionButeurs(eqId) {
     if (individuel) return "";
-    return sectionStat(eqId, STATS.buts) + (LBL_PASS ? sectionStat(eqId, STATS.passes) : "");
+    const disc = eqId && equipe(eqId) ? disciplineCard(equipe(eqId)) : "";
+    return sectionStat(eqId, STATS.buts) + (LBL_PASS ? sectionStat(eqId, STATS.passes) : "")
+      + (disc ? `<section class="section" style="padding-top:0"><div class="wrap"><div class="section-title"><h2>Discipline</h2></div>${disc}</div></section>` : "");
   }
 
   /* ------------------------------------- Données officielles (widgets) */
@@ -339,13 +383,17 @@ window.startSite = function (C) {
             ${extLink(lienEquipe(eq), "Calendrier & classement officiels")}
             <div style="display:flex;gap:20px;flex-wrap:wrap">${eq.staff.length ? "" : `<span class="muted small">Encadrement à compléter</span>`}${eq.staff.map((s) => `<div><div class="small muted">${esc(s.role)}</div><strong>${esc(s.nom)}</strong></div>`).join("")}</div>
           </div>
-          ${groupes.filter(([, js]) => js.length).map(([p, js]) => `<h3 class="poste-title">${esc(p)}</h3><div class="grid grid-4">${js.sort(sortJ).map((j) => `
-            <div class="player"><div class="photo">${j.photo ? `<img src="${esc(j.photo)}" alt="${esc(j.nom)}" loading="lazy">` : silhouette}${j.num != null ? `<span class="num">${j.num}</span>` : ""}</div>
-            <div class="info"><strong>${esc(j.nom)}</strong><span class="muted small">${esc(j.poste)}</span></div></div>`).join("")}</div>`).join("")}
+          ${infirmerieCard(eq) ? `<div style="margin-top:16px">${infirmerieCard(eq)}</div>` : ""}
+          ${groupes.filter(([, js]) => js.length).map(([p, js]) => `<h3 class="poste-title">${esc(p)}</h3><div class="grid grid-4">${js.sort(sortJ).map((j) => {
+            const st = statutJoueur(eq.id, j.nom);
+            return `<div class="player ${st ? "indispo" : ""}"><div class="photo">${j.photo ? `<img src="${esc(j.photo)}" alt="${esc(j.nom)}" loading="lazy">` : silhouette}${j.num != null ? `<span class="num">${j.num}</span>` : ""}
+              ${st ? `<span class="player-badge ${st.type}">${st.type === "blessure" ? "🩹 Blessé" : "⛔ Suspendu"}</span>` : ""}</div>
+            <div class="info"><strong>${esc(j.nom)}</strong><span class="muted small">${esc(j.poste)}</span></div></div>`;
+          }).join("")}</div>`).join("")}
           ${eq.joueurs.length ? "" : `<div class="empty card" style="margin-top:20px">L'effectif de cette équipe sera bientôt publié.</div>`}
           ${individuel ? "" : (() => {
-            const cb = buteursCard(eq, 5), cp = LBL_PASS ? statCard(eq, STATS.passes, 5) : "";
-            return cb || cp ? `<h3 class="poste-title">Meilleurs ${esc(LBL_BUT.toLowerCase())}${cp ? " et passeurs" : ""}</h3><div class="grid grid-2">${cb}${cp}</div>` : "";
+            const cb = buteursCard(eq, 5), cp = LBL_PASS ? statCard(eq, STATS.passes, 5) : "", cd = disciplineCard(eq);
+            return cb || cp || cd ? `<h3 class="poste-title">Statistiques de la saison</h3><div class="grid grid-2">${cb}${cp}${cd}</div>` : "";
           })()}
         </div></section>`;
     },

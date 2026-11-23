@@ -11,11 +11,14 @@
     if (!club) { app.innerHTML = `<div class="wrap empty">Club introuvable.</div>`; return; }
 
     const q = (t, order = "id") => sb.from(t).select("*").eq("club_id", club.id).order(order);
-    const [eq, lic, ren, conv, cla, evt, tour, med] = await Promise.all([
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    const [eq, lic, ren, conv, cla, evt, tour, med, ind] = await Promise.all([
       q("equipes", "ordre"), q("licencies", "ordre"), q("rencontres", "date"), q("convocations"),
       q("classements"), q("evenements", "date"), q("tournois", "date"), q("medias", "date"),
+      // indisponibilités en cours uniquement (fin non fixée ou pas encore passée)
+      sb.from("indisponibilites").select("*").eq("club_id", club.id).lte("date_debut", aujourdhui).or(`date_fin.is.null,date_fin.gte.${aujourdhui}`).order("date_debut"),
     ]);
-    for (const r of [eq, lic, ren, conv, cla, evt, tour, med]) if (r.error) throw r.error;
+    for (const r of [eq, lic, ren, conv, cla, evt, tour, med, ind]) if (r.error) throw r.error;
 
     const T = tour.data.find((t) => !t.date || new Date(t.date) >= new Date(Date.now() - 864e5)) || tour.data[tour.data.length - 1];
     const classements = {};
@@ -47,7 +50,10 @@
         resultat: m.resultat_texte || "",
         buteurs: Array.isArray(m.buteurs) ? m.buteurs.filter((b) => b && b.nom) : [],
         passeurs: Array.isArray(m.passeurs) ? m.passeurs.filter((b) => b && b.nom) : [],
+        jaunes: Array.isArray(m.cartons_jaunes) ? m.cartons_jaunes.filter((b) => b && b.nom) : [],
+        rouges: Array.isArray(m.cartons_rouges) ? m.cartons_rouges.filter((b) => b && b.nom) : [],
       })),
+      indispos: ind.data.map((x) => ({ equipe: x.equipe_id, nom: x.nom, type: x.type, precision: x.precision || "", fin: x.date_fin, matchs: x.matchs })),
       convocations: conv.data.map((c) => ({ match: c.rencontre_id, rdv: c.rdv || "", lieuRdv: c.lieu_rdv || "", responsable: c.responsable || "", joueurs: c.joueurs || [], remarques: c.remarques })),
       classements,
       evenements: evt.data.map((e) => ({ date: e.date, titre: e.titre, type: e.type || "", lieu: e.lieu || "", description: e.description || "" })),

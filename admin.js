@@ -121,7 +121,7 @@
           <button type="button" class="btn ghost small" data-addlien="${id}">+ Ajouter un lien</button>${hint}`);
       }
       case "buteurs": {
-        const rows = (Array.isArray(row[f.k]) ? row[f.k] : []).map((b) => butRow(b, f.cle)).join("");
+        const rows = (Array.isArray(row[f.k]) ? row[f.k] : []).map((b) => butRow(b, f.cle, f.max)).join("");
         return wrap(`${lab}<div class="but-list" id="${id}">${rows}</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn ghost small" data-addbut="${id}">+ Ajouter un ${esc(f.unit || "buteur")}</button><span class="hint" id="${id}_total"></span></div>
           ${f.k === "buteurs" ? `<datalist id="dl-joueurs"></datalist>` : ""}${hint}`);
@@ -141,10 +141,11 @@
     }
   }
 
-  function butRow(b = {}, cle = "buts") {
-    const n = Math.min(Math.max(parseInt(b[cle], 10) || 1, 1), 15);
+  function butRow(b = {}, cle = "buts", max = 15) {
+    max = max || 15;
+    const n = Math.min(Math.max(parseInt(b[cle], 10) || 1, 1), max);
     return `<div class="but-row"><input class="but-nom" list="dl-joueurs" placeholder="Nom du joueur" value="${esc(b.nom || "")}" aria-label="Nom">
-      <select class="but-n" aria-label="Nombre">${Array.from({ length: 15 }, (_, i) => i + 1).map((k) => `<option value="${k}" ${k === n ? "selected" : ""}>×${k}</option>`).join("")}</select>
+      <select class="but-n" aria-label="Nombre" ${max === 1 ? "hidden" : ""}>${Array.from({ length: max }, (_, i) => i + 1).map((k) => `<option value="${k}" ${k === n ? "selected" : ""}>×${k}</option>`).join("")}</select>
       <button type="button" class="but-del" aria-label="Retirer">✕</button></div>`;
   }
   function readButeurs(box, cle = "buts") {
@@ -167,11 +168,11 @@
       if (!box) return;
       const refresh = () => {
         const n = readButeurs(box, f.cle).reduce((s, b) => s + b[f.cle], 0);
-        const sp = parseInt(dlgForm.elements.score_pour?.value, 10);
+        const sp = f.vsScore ? parseInt(dlgForm.elements.score_pour?.value, 10) : NaN;
         total.textContent = n ? `${n} ${f.mot}${Number.isFinite(sp) ? ` sur ${sp} but(s) marqué(s)` : ""}` : "";
         total.style.color = Number.isFinite(sp) && n > sp ? "#b42318" : "";
       };
-      dlgForm.querySelector(`[data-addbut="f_${f.k}"]`).onclick = () => { box.insertAdjacentHTML("beforeend", butRow({}, f.cle)); box.lastElementChild.querySelector("input").focus(); refresh(); };
+      dlgForm.querySelector(`[data-addbut="f_${f.k}"]`).onclick = () => { box.insertAdjacentHTML("beforeend", butRow({}, f.cle, f.max)); box.lastElementChild.querySelector("input").focus(); refresh(); };
       box.addEventListener("click", (e) => { if (e.target.closest(".but-del")) { e.target.closest(".but-row").remove(); refresh(); } });
       box.addEventListener("input", refresh); box.addEventListener("change", refresh);
       dlgForm.elements.score_pour?.addEventListener("input", refresh);
@@ -219,7 +220,14 @@
       const { data, error } = await sb.from("licencies").select("nom,numero").eq("equipe_id", r.equipe_id).eq("type", "joueur").order("numero");
       if (error) return toast(msgErr(error), true);
       if (!data.length) return toast("L'effectif de cette équipe est vide.", true);
-      document.getElementById(b.dataset.fill).value = data.map((j) => j.nom).join("\n");
+      // On écarte les joueurs blessés ou suspendus à la date du match
+      const jour = String(r.date).slice(0, 10);
+      const { data: indispo } = await sb.from("indisponibilites").select("nom,type,date_debut,date_fin").eq("club_id", S.club.id).lte("date_debut", jour);
+      const absents = new Map((indispo || []).filter((x) => !x.date_fin || x.date_fin >= jour).map((x) => [x.nom.trim().toLowerCase(), x.type]));
+      const dispo = data.filter((j) => !absents.has(j.nom.trim().toLowerCase()));
+      document.getElementById(b.dataset.fill).value = dispo.map((j) => j.nom).join("\n");
+      const ecartes = data.filter((j) => absents.has(j.nom.trim().toLowerCase()));
+      if (ecartes.length) toast(`Non convoqués car indisponibles : ${ecartes.map((j) => `${j.nom} (${absents.get(j.nom.trim().toLowerCase()) === "blessure" ? "blessé" : "suspendu"})`).join(", ")}`);
     }));
     dlgForm.onsubmit = async (ev) => {
       ev.preventDefault();
@@ -245,7 +253,8 @@
             out[f.k] = readButeurs(document.getElementById("f_" + f.k), f.cle);
             const sp = out.score_pour ?? fromInput({ type: "number" }, dlgForm.elements.score_pour);
             const n = out[f.k].reduce((s, b) => s + b[f.cle], 0);
-            if (sp != null && n > sp) throw new Error(`${f.label} : ${n} ${f.mot} alors que le score est de ${sp}. Corrigez la liste ou le score.`);
+            if (f.max) out[f.k].forEach((b) => { if (b[f.cle] > f.max) throw new Error(`${f.label} : ${b.nom} ne peut pas en avoir plus de ${f.max} dans un même match.`); });
+            if (f.vsScore && sp != null && n > sp) throw new Error(`${f.label} : ${n} ${f.mot} alors que le score est de ${sp}. Corrigez la liste ou le score.`);
             continue;
           }
           if (f.type === "image") {
@@ -283,10 +292,14 @@
           { k: "lieu", label: "Lieu", type: "text", hint: "Laisser vide pour les matchs à domicile au stade habituel." },
           { k: "score_pour", label: `Notre score (${P().marque || "points"})`, type: "number", hide: () => ind, hint: "À remplir après la rencontre." },
           { k: "score_contre", label: "Score adverse", type: "number", hide: () => ind },
-          { k: "buteurs", label: P().marqueurs || "Buteurs", type: "buteurs", cle: "buts", mot: "but(s) attribué(s)", unit: (P().marqueurs || "Buteurs").toLowerCase().replace(/s$/, ""), hide: () => ind,
+          { k: "buteurs", label: P().marqueurs || "Buteurs", type: "buteurs", cle: "buts", mot: "but(s) attribué(s)", vsScore: true, unit: (P().marqueurs || "Buteurs").toLowerCase().replace(/s$/, ""), hide: () => ind,
             hint: "Choisissez le joueur (les noms de l'effectif sont proposés) et le nombre de buts : ×1, ×2, ×3…" },
-          { k: "passeurs", label: P().passeurs || "Passeurs décisifs", type: "buteurs", cle: "passes", mot: "passe(s) décisive(s)", unit: "passeur", hide: () => ind || !P().passeurs,
+          { k: "passeurs", label: P().passeurs || "Passeurs décisifs", type: "buteurs", cle: "passes", mot: "passe(s) décisive(s)", vsScore: true, unit: "passeur", hide: () => ind || !P().passeurs,
             hint: "Le joueur qui a fait la dernière passe avant un but, et combien de fois : ×1, ×2… (facultatif)" },
+          { k: "cartons_jaunes", label: "🟨 Cartons jaunes", type: "buteurs", cle: "n", max: 2, mot: "carton(s) jaune(s)", unit: "carton jaune", hide: () => ind || !P().cartons,
+            hint: "Joueur averti ; ×2 si deux jaunes dans le match (facultatif)." },
+          { k: "cartons_rouges", label: "🟥 Cartons rouges", type: "buteurs", cle: "n", max: 1, mot: "carton(s) rouge(s)", unit: "carton rouge", hide: () => ind || !P().cartons,
+            hint: "Joueur exclu. Pensez à l'ajouter dans l'onglet « Infirmerie / suspendus » quand la suspension est connue." },
           { k: "resultat_texte", label: ind ? "Résultats (médailles, classements…)" : "Précision (facultatif)", type: ind ? "textarea" : "text", ph: ind ? "2 médailles d'or, 1 de bronze" : "Victoire aux tirs au but" },
         ];
       },
@@ -326,6 +339,21 @@
       ],
       line: (r) => [`${r.numero != null ? r.numero + ". " : ""}${r.nom}`, [eqName(r.equipe_id), r.type === "staff" ? r.fonction || "Encadrement" : r.poste].filter(Boolean).join(" · ")],
       thumb: (r) => r.autorisation_photo && r.photo_url,
+    },
+    indisponibilites: {
+      titre: () => "Infirmerie / suspendus", table: "indisponibilites", order: ["date_debut", false], filtre: true,
+      help: () => "Joueurs indisponibles. Ils s'affichent sur la page Effectifs de leur équipe tant que la date de fin n'est pas passée, et sont écartés quand on remplit une convocation avec l'effectif. Données de santé : n'indiquez jamais de détail médical, et ayez l'accord du joueur (ou des parents pour un mineur).",
+      fields: () => [
+        { k: "equipe_id", label: "Équipe", type: "equipe", req: true },
+        { k: "nom", label: "Joueur", type: "text", req: true, hint: "Écrivez le nom exactement comme dans l'effectif." },
+        { k: "type", label: "Motif", type: "select", opts: [["blessure", "🩹 Blessé (infirmerie)"], ["suspension", "⛔ Suspendu"]] },
+        { k: "matchs", label: "Nombre de matchs de suspension", type: "number", showIf: { k: "type", in: ["suspension"] } },
+        { k: "precision", label: "Précision (facultatif, visible sur le site)", type: "text", ph: "Ex. « 3 matchs fermes » ou « reprise progressive »",
+          hint: "Ne mettez pas de diagnostic ni de détail médical." },
+        { k: "date_debut", label: "Depuis le", type: "date", req: true },
+        { k: "date_fin", label: "Retour prévu / fin de suspension", type: "date", hint: "Laisser vide si inconnu. Après cette date, le joueur disparaît de la liste tout seul." },
+      ],
+      line: (r) => [`${r.type === "blessure" ? "🩹" : "⛔"} ${r.nom}`, [eqName(r.equipe_id), r.type === "blessure" ? "Blessé" : `Suspendu${r.matchs ? ` (${r.matchs} match${r.matchs > 1 ? "s" : ""})` : ""}`, r.date_fin ? `jusqu'au ${fmtD(r.date_fin)}` : "retour non fixé", r.date_fin && r.date_fin < new Date().toISOString().slice(0, 10) ? "terminé" : ""].filter(Boolean).join(" · ")],
     },
     equipes: {
       titre: () => "Équipes", table: "equipes", order: ["ordre", true],
@@ -398,7 +426,7 @@
       thumb: (r) => r.type === "photo" ? r.url : r.youtube ? `https://i.ytimg.com/vi/${r.youtube}/default.jpg` : "",
     },
   };
-  const TABS = [["rencontres"], ["convocations"], ["licencies"], ["equipes"], ["classements"], ["evenements"], ["tournois"], ["medias"], ["club", "Infos du club"], ["moderateurs", "Modérateurs"]];
+  const TABS = [["rencontres"], ["convocations"], ["licencies"], ["indisponibilites"], ["equipes"], ["classements"], ["evenements"], ["tournois"], ["medias"], ["club", "Infos du club"], ["moderateurs", "Modérateurs"]];
 
   /* ---------------------------------------------------------- Écrans d'accès */
   function authView(mode = "login", note = "") {
@@ -543,7 +571,8 @@
   }
   function defaults() {
     const eq = S.filtre[S.tab] || (S.equipes.length === 1 ? S.equipes[0].id : "");
-    return { equipe_id: eq, domicile: true, type: S.tab === "medias" ? "photo" : "joueur", equipe_nom: S.tab === "classements" ? S.club.nom : "", date: S.tab === "medias" ? new Date().toISOString().slice(0, 10) : null, ordre: 0, j: 0, g: 0, n: 0, p: 0, bp: 0, bc: 0, bonus: 0 };
+    const today = new Date().toISOString().slice(0, 10);
+    return { date_debut: today, equipe_id: eq, domicile: true, type: S.tab === "medias" ? "photo" : S.tab === "indisponibilites" ? "blessure" : "joueur", equipe_nom: S.tab === "classements" ? S.club.nom : "", date: S.tab === "medias" ? new Date().toISOString().slice(0, 10) : null, ordre: 0, j: 0, g: 0, n: 0, p: 0, bp: 0, bc: 0, bonus: 0 };
   }
 
   /* --------------------------------------------------- Infos du club */

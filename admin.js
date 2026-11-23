@@ -120,6 +120,16 @@
         return wrap(`${lab}<div class="but-list" id="${id}">${(Array.isArray(row[f.k]) ? row[f.k] : []).map(lienRow).join("")}</div>
           <button type="button" class="btn ghost small" data-addlien="${id}">+ Ajouter un lien</button>${hint}`);
       }
+      case "coachs": {
+        const coachRow = (c = {}) => `<div class="but-row coach-row"><input class="coach-nom" maxlength="60" placeholder="Prénom et nom" value="${esc(c.nom || "")}" aria-label="Nom">
+          <input class="coach-role" list="dl-roles" maxlength="40" placeholder="Rôle" value="${esc(c.role || "Entraîneur")}" aria-label="Rôle">
+          <button type="button" class="but-del" aria-label="Retirer">✕</button></div>`;
+        window.__coachRow = coachRow;
+        const liste = Array.isArray(row[f.k]) && row[f.k].length ? row[f.k] : [{}];
+        return wrap(`${lab}<div class="but-list" id="${id}">${liste.map(coachRow).join("")}</div>
+          <button type="button" class="btn ghost small" data-addcoach="${id}">+ Ajouter un membre de l'encadrement</button>
+          <datalist id="dl-roles">${["Entraîneur", "Entraîneur adjoint", "Éducateur", "Éducatrice", "Entraîneur des gardiens", "Préparateur physique", "Dirigeant", "Délégué"].map((r) => `<option value="${r}">`).join("")}</datalist>${hint}`);
+      }
       case "compo": {
         const c = row[f.k] && typeof row[f.k] === "object" ? row[f.k] : {};
         const forms = P().formations || [];
@@ -267,6 +277,11 @@
     dlgForm.onchange = () => applyShowIf(visibles);
     bindButeurs(visibles);
     dlgForm.dataset.rowId = row.id || "";
+    dlgForm.querySelectorAll("[data-addcoach]").forEach((b) => {
+      const box = document.getElementById(b.dataset.addcoach);
+      b.onclick = () => { if (box.children.length >= 8) return toast("8 personnes maximum.", true); box.insertAdjacentHTML("beforeend", window.__coachRow()); box.lastElementChild.querySelector("input").focus(); };
+      box.addEventListener("click", (e) => { if (e.target.closest(".but-del")) e.target.closest(".coach-row").remove(); });
+    });
     bindCompo(visibles);
     dlgForm.querySelectorAll("[data-addlien]").forEach((b) => {
       const box = document.getElementById(b.dataset.addlien);
@@ -308,6 +323,11 @@
             }
             if (rows.length > 6) throw new Error("6 liens maximum.");
             out[f.k] = rows;
+            continue;
+          }
+          if (f.type === "coachs") {
+            out[f.k] = [...document.querySelectorAll(`#f_${f.k} .coach-row`)].map((r) => ({ nom: r.querySelector(".coach-nom").value.trim().replace(/\s+/g, " "), role: r.querySelector(".coach-role").value.trim() || "Entraîneur" }))
+              .filter((c) => c.nom).slice(0, 8);
             continue;
           }
           if (f.type === "compo") {
@@ -429,6 +449,7 @@
       titre: () => "Équipes", table: "equipes", order: ["ordre", true],
       fields: () => [
         { k: "nom", label: "Nom", type: "text", req: true, ph: "Seniors 1, U13, Loisirs…" },
+        { k: "coachs", label: "🧢 Coach(s) et encadrement", type: "coachs", hint: "Le ou les coachs de l'équipe, avec leur rôle. Ils s'affichent sur le site avec l'équipe." },
         { k: "categorie", label: "Catégorie", type: "text" },
         { k: "division", label: "Niveau / division", type: "text" },
         { k: "ordre", label: "Ordre d'affichage", type: "number", hint: "1 = en premier." },
@@ -437,7 +458,7 @@
           hint: "Collez ici le code d'intégration d'un widget « Équipe » créé sur admin.scorenco.com. Seul un code venant de Score'n'co est accepté.",
           validate: (v) => !v || /https:\/\/([a-z0-9-]+\.)*scorenco\.com\//i.test(v) || "Ce code ne vient pas de Score'n'co : copiez le code d'intégration depuis admin.scorenco.com." },
       ],
-      line: (r) => [r.nom, [r.categorie, r.division, r.widget_code ? "✔ classement automatique" : r.lien_officiel ? "✔ lien officiel" : ""].filter(Boolean).join(" · ")],
+      line: (r) => [r.nom, [(r.coachs || []).length ? "🧢 " + r.coachs.map((c) => c.nom).join(", ") : "Coach à renseigner", r.division, r.widget_code ? "✔ classement automatique" : r.lien_officiel ? "✔ lien officiel" : ""].filter(Boolean).join(" · ")],
     },
     classements: {
       titre: () => "Classements", table: "classements", order: ["id", true], filtre: true, hide: () => !P().classement,

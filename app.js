@@ -133,6 +133,14 @@ window.startSite = function (C) {
   }
 
   const empty = (txt) => `<div class="empty card">${txt}</div>`;
+  // Nom(s) du ou des coachs d'une équipe (court = noms seuls, sinon « Rôle : nom »)
+  function coachTxt(eq, court = false) {
+    const st = eq?.staff || [];
+    if (!st.length) return "";
+    const coachs = st.filter((s) => /entra[iî]n|coach|[ée]ducat/i.test(s.role || ""));
+    const liste = coachs.length ? coachs : st.slice(0, 2);
+    return court ? liste.map((s) => s.nom).join(", ") : liste.map((s) => `${s.role} : ${s.nom}`).join(" · ");
+  }
 
   /* ---------------------------------------- Classement des buteurs */
   // Calculé à partir des buteurs saisis dans les matchs de la saison en cours (depuis le 1er juillet)
@@ -249,7 +257,8 @@ window.startSite = function (C) {
     const url = lienEquipe(eq);
     if (!url && !eq.widget) return "";
     return `<div class="card officiel"><div class="officiel-head"><div><h3 style="margin:0">Calendrier & classement officiels · ${esc(eq.nom)}</h3>
-      <p class="muted small" style="margin:4px 0 0">${eq.lienOfficiel ? "Page officielle de l'équipe" : C.lienOfficiel ? "Page officielle du club" : "Site de la fédération"}${FED?.nom ? " · " + esc(FED.nom) : ""}</p></div>
+      <p class="muted small" style="margin:4px 0 0">${eq.lienOfficiel ? "Page officielle de l'équipe" : C.lienOfficiel ? "Page officielle du club" : "Site de la fédération"}${FED?.nom ? " · " + esc(FED.nom) : ""}</p>
+      ${coachTxt(eq) ? `<p class="small" style="margin:4px 0 0">🧢 ${esc(coachTxt(eq))}</p>` : ""}</div>
       ${extLink(url, "Voir le classement officiel", "btn")}</div>
       ${!eq.widget && eq.lienOfficiel ? `<p class="small" style="margin:0">Le classement et le calendrier de cette équipe sont tenus à jour par la fédération : ils s'ouvrent sur son site officiel.</p>` : ""}
       ${eq.widget ? `<div class="widget-box" data-widget="${eq.id}"></div><p class="muted small" style="margin:8px 0 0">Mis à jour automatiquement à partir des données de la fédération.</p>` : ""}</div>`;
@@ -261,7 +270,7 @@ window.startSite = function (C) {
       ${extLink(C.lienOfficiel || FED?.url, "Page du club")}</div>
       <div class="team-links">${C.equipes.map((e) => e.widget
         ? `<a class="team-link" href="#/${page}?equipe=${e.id}"><b>${esc(e.nom)}</b><span>${esc(e.division || "Classement")}</span></a>`
-        : lienEquipe(e) ? `<a class="team-link" href="${esc(lienEquipe(e))}" target="_blank" rel="noopener"><b>${esc(e.nom)} <span aria-hidden="true">↗</span></b><span>${esc(e.division || "Calendrier et classement")}</span></a>` : "").join("")}</div></div>`;
+        : lienEquipe(e) ? `<a class="team-link" href="${esc(lienEquipe(e))}" target="_blank" rel="noopener"><b>${esc(e.nom)} <span aria-hidden="true">↗</span></b><span>${esc(e.division || "Calendrier et classement")}</span>${coachTxt(e, true) ? `<span>🧢 ${esc(coachTxt(e, true))}</span>` : ""}</a>` : "").join("")}</div></div>`;
   }
 
   /* ------------------------------------------------------------ Pages */
@@ -327,7 +336,7 @@ window.startSite = function (C) {
           <div class="convoc">
             <div>
               ${c.rdv ? `<div class="rdv">Rendez-vous<strong>${esc(c.rdv.slice(0, 5).replace(":", "h"))}</strong>${esc(c.lieuRdv)}</div>` : ""}
-              ${c.responsable ? `<p class="small" style="margin:0 0 8px"><b>Responsable :</b> ${esc(c.responsable)}</p>` : ""}
+              ${c.responsable ? `<p class="small" style="margin:0 0 8px"><b>Responsable :</b> ${esc(c.responsable)}</p>` : eq && coachTxt(eq) ? `<p class="small" style="margin:0 0 8px"><b>🧢 Coach :</b> ${esc(coachTxt(eq, true))}</p>` : ""}
               ${c.remarques ? `<div class="notice">${esc(c.remarques)}</div>` : ""}
             </div>
             <div><h3 style="margin-top:12px">Convoqués (${c.joueurs.length})</h3><ol>${c.joueurs.map((j) => `<li>${esc(j)}</li>`).join("")}</ol></div>
@@ -356,7 +365,7 @@ window.startSite = function (C) {
           <div class="card" style="display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;align-items:center">
             <div><h2 style="margin:0">${esc(eq.nom)}</h2><p class="muted" style="margin:0">${[eq.categorie, eq.division, plural(eq.joueurs.length, individuel ? "licencié" : "joueur")].filter(Boolean).map(esc).join(" · ")}</p></div>
             ${extLink(lienEquipe(eq), "Calendrier & classement officiels")}
-            <div style="display:flex;gap:20px;flex-wrap:wrap">${eq.staff.length ? "" : `<span class="muted small">Encadrement à compléter</span>`}${eq.staff.map((s) => `<div><div class="small muted">${esc(s.role)}</div><strong>${esc(s.nom)}</strong></div>`).join("")}</div>
+            <div style="display:flex;gap:20px;flex-wrap:wrap">${eq.staff.length ? "" : `<span class="muted small">Coach à compléter</span>`}${eq.staff.map((s) => `<div class="staff-item"><span class="staff-ico" aria-hidden="true">🧢</span><div><div class="small muted">${esc(s.role)}</div><strong>${esc(s.nom)}</strong></div></div>`).join("")}</div>
           </div>
           ${infirmerieCard(eq) ? `<div style="margin-top:16px">${infirmerieCard(eq)}</div>` : ""}
           ${groupes.filter(([, js]) => js.length).map(([p, js]) => `<h3 class="poste-title">${esc(p)}</h3><div class="grid grid-4">${js.sort(sortJ).map((j) => {

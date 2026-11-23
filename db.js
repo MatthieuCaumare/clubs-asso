@@ -39,7 +39,13 @@
       equipes: eq.data.map((e) => ({
         id: e.id, nom: e.nom, categorie: e.categorie || "", division: e.division || "",
         lienOfficiel: e.lien_officiel || "", widget: e.widget_code || "",
-        staff: lic.data.filter((l) => l.equipe_id === e.id && l.type === "staff").map((l) => ({ nom: l.nom, role: l.fonction || "Encadrant" })),
+        // Encadrement : coachs saisis dans la fiche équipe, puis encadrants ajoutés dans l'effectif (sans doublon)
+        staff: (() => {
+          const fiche = (Array.isArray(e.coachs) ? e.coachs : []).filter((c) => c && c.nom).map((c) => ({ nom: c.nom, role: c.role || "Entraîneur" }));
+          const vus = new Set(fiche.map((c) => c.nom.trim().toLowerCase()));
+          const lics = lic.data.filter((l) => l.equipe_id === e.id && l.type === "staff" && !vus.has(l.nom.trim().toLowerCase())).map((l) => ({ nom: l.nom, role: l.fonction || "Encadrant" }));
+          return [...fiche, ...lics];
+        })(),
         joueurs: lic.data.filter((l) => l.equipe_id === e.id && l.type === "joueur")
           .map((l) => ({ num: l.numero, nom: l.nom, poste: l.poste || "", photo: l.autorisation_photo ? l.photo_url : "" })),
       })),

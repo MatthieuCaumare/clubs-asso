@@ -730,6 +730,33 @@
   }
 
   /* ---------------------------------------------------- Modérateurs */
+  const lienModeration = () => location.origin + location.pathname + "?club=" + S.club.slug;
+  function messageInvitation(email, role) {
+    const r = role === "admin" ? "administrateur" : "modérateur";
+    return `Bonjour,
+
+Je t'ai ajouté comme ${r} du site de ${S.club.nom}. Pour activer ton accès :
+
+1. Va sur ${lienModeration()}
+2. Clique sur « Créer mon compte »${email ? ` avec l'adresse ${email}` : " avec l'adresse e-mail que tu m'as donnée"} et choisis un mot de passe (8 caractères minimum).
+3. Tu vas recevoir un e-mail « Confirm your email address » : clique sur le lien (regarde dans les indésirables si tu ne le vois pas).
+4. Reviens sur la page et connecte-toi.
+
+Tu pourras ensuite publier les matchs, scores, buteurs, compos, convocations et photos du club.
+À bientôt !`;
+  }
+  async function copier(texte, bouton) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(texte); ok = true; } catch {
+      const t = Object.assign(document.createElement("textarea"), { value: texte });
+      t.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(t); t.select();
+      try { ok = document.execCommand("copy"); } catch { ok = false; } t.remove();
+    }
+    if (!ok) return toast("Copie impossible : sélectionnez le texte et faites Ctrl+C.", true);
+    const avant = bouton.textContent; bouton.textContent = "✔ Copié !"; bouton.disabled = true;
+    setTimeout(() => { bouton.textContent = avant; bouton.disabled = false; }, 1800);
+    toast("Copié : il ne reste plus qu'à le coller dans votre message.");
+  }
   async function modsPanel(panel) {
     const [{ data: membres, error }, { data: invites }] = await Promise.all([
       sb.rpc("club_members_list", { cid: S.club.id }),
@@ -749,8 +776,16 @@
         <div class="acts"><select data-role="${m.user_id}" ${m.user_id === me ? "disabled" : ""}><option value="moderateur" ${m.role === "moderateur" ? "selected" : ""}>Modérateur</option><option value="admin" ${m.role === "admin" ? "selected" : ""}>Administrateur</option></select>
         ${m.user_id === me ? "" : `<button class="btn ghost small" data-rm="${m.user_id}">Retirer</button>`}</div></div>`).join("") || `<div class="empty card">Aucun membre.</div>`}</div>
       ${invites?.length ? `<h3 style="margin-top:20px">En attente de création de compte (${invites.length})</h3><div class="list">${invites.map((i) => `<div class="item"><div class="main"><strong>${esc(i.email)}</strong><span>${roleLbl(i.role)} · ajouté le ${fmtD(i.created_at)}</span></div>
-        <div class="acts"><button class="btn ghost small" data-rminv="${esc(i.email)}">Annuler</button></div></div>`).join("")}</div>` : ""}
-      <div class="card" style="margin-top:20px"><b>Adresse à envoyer aux nouveaux modérateurs :</b><br><code style="overflow-wrap:anywhere">${esc(location.origin + location.pathname + "?club=" + S.club.slug)}</code></div>`;
+        <div class="acts"><button class="btn small" data-copymsg="${esc(i.email)}" data-role="${esc(i.role)}" title="Copier le message d'invitation pour cette personne">📋 Copier le message</button><button class="btn ghost small" data-rminv="${esc(i.email)}">Annuler</button></div></div>`).join("")}</div>` : ""}
+      <div class="card invite-card" style="margin-top:20px"><b>À envoyer aux nouveaux modérateurs</b>
+        <div class="invite-link"><code>${esc(lienModeration())}</code></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn small" data-copy="lien">📋 Copier le lien</button>
+          <button class="btn secondary small" data-copy="message">✉️ Copier le message d'invitation</button>
+        </div>
+        <p class="muted small" style="margin:8px 0 0">Collez-le ensuite dans un e-mail, un SMS, WhatsApp ou Messenger.</p></div>`;
+    panel.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => copier(b.dataset.copy === "lien" ? lienModeration() : messageInvitation(), b)));
+    panel.querySelectorAll("[data-copymsg]").forEach((b) => (b.onclick = () => copier(messageInvitation(b.dataset.copymsg, b.dataset.role), b)));
     panel.querySelector("#inv").onsubmit = async (e) => {
       e.preventDefault();
       const email = panel.querySelector("#inv-email").value.trim().toLowerCase(), role = panel.querySelector("#inv-role").value;
